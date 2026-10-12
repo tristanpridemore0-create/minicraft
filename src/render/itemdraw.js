@@ -1,3 +1,5 @@
+// Draws one item the way it appears in a list: its icon, then its name.
+
 import { C } from "./palette.js";
 import { drawText } from "./font.js";
 import { icon } from "./sprites.js";

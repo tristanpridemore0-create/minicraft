@@ -62,6 +62,7 @@ The running game is available in the console as `window.game`.
 - The rules follow the original game where practical. `APPROXIMATIONS.md` lists what differs; update it when you change a rule, and update `README.md` when you change the controls.
 - There are two ways to play, normal and build mode (`game.build`). A change to the rules usually needs to behave sensibly in both.
 - Saves carry a `version` number (`save.js`). Keep older saves loading.
+- Every file starts with a comment saying what it is for, and every function has one saying what it does. Comments are in plain language and explain why, not only what. When you change code, update the comment above it so the two still agree.
 
 ## Publishing
 

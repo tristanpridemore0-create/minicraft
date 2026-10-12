@@ -1,3 +1,6 @@
+// The pictures for everything that is not terrain: the player, monsters,
+// furniture, item icons, and the hearts and bolts on the bottom bar.
+
 import { C } from "./palette.js";
 import { itemDef } from "../items/defs.js";
 import { TOOL } from "../constants.js";
@@ -5,6 +8,8 @@ import { TOOL } from "../constants.js";
 // Every sprite is a grid of palette letters ("." is see-through). The same
 // drawing is reused with different palettes, e.g. the four zombie colours.
 
+// The player's body facing down, up and sideways. o is hair, outline and boots,
+// s is skin and c is clothes.
 const BODY_DOWN_A = [
   "................",
   ".....oooooo.....",
@@ -59,6 +64,7 @@ const BODY_SIDE_A = [
   ".....oo.oo......",
   "................",
 ];
+// The second sideways walking frame: the same drawing with the legs apart.
 const BODY_SIDE_B = [...BODY_SIDE_A.slice(0, 12), ".....oooooo.....", "....ooo..ooo....", "...ooo....ooo...", "................"];
 
 // Second walking frame: the other foot is forward.
@@ -79,6 +85,7 @@ function zombify(rows, eyes = []) {
   });
 }
 
+// A slime at rest and in mid-hop. o is the outline, b the body and e the eyes.
 const SLIME_REST = [
   "................",
   "................",
@@ -116,6 +123,7 @@ const SLIME_JUMP = [
   "................",
 ];
 
+// The Air Wizard. o is the outline, r his robe and hat, w his beard and s skin.
 const WIZARD = [
   ".......oo.......",
   "......orro......",
@@ -135,6 +143,7 @@ const WIZARD = [
   "..oooooooooooo..",
 ];
 
+// Small effects, all drawn in white.
 const SPARK = ["...w....", ".w.w.w..", "..www...", "wwwwwww.", "..www...", ".w.w.w..", "...w....", "........"];
 
 const SMASH = [
@@ -159,6 +168,7 @@ const SMASH = [
 // The arc drawn in front of the player while swinging (this one points up).
 const SLASH = ["....wwwwwwww....", "..ww........ww..", ".w............w.", "w..............w"];
 
+// Furniture.
 const WORKBENCH = [
   "................",
   "................",
@@ -268,10 +278,13 @@ const LANTERN = [
   "................",
 ];
 
+// The heart and the stamina bolt on the bottom bar.
 const HEART = ["........", ".aa.aa..", "abbabba.", "abcbbba.", "abbbbba.", ".abbba..", "..aba...", "...a...."];
 const BOLT = ["....aa..", "...aba..", "..abba..", ".abbbaaa", "aaabbba.", "..abba..", "..aba...", "..aa...."];
 
 // 8x8 item icons.
+// Shapes are shared: one "chunk" drawing serves stone, coal and both ores, each
+// with its own colours (see ICONS below).
 const ICON_SHAPES = {
   chunk: ["........", "..aaaa..", ".abbcba.", "abbcbbba", "abbbbbca", "abcbbbba", ".aaaaaa.", "........"],
   ingot: ["........", "...aaaa.", "..acccba", ".acccbba", "acccbba.", "abbbba..", ".aaaa...", "........"],
@@ -301,8 +314,10 @@ const ICON_SHAPES = {
   axe: ["....mm..", "...mmmm.", "..mmmhmm", "...mhhm.", "...hh...", "..hh....", ".hh.....", "hh......"],
 };
 
+// Shorthand for a palette with the letters a, b and c, and sometimes d.
 const abc = (a, b, c, d) => ({ a: C(a), b: C(b), c: C(c), d: d === undefined ? undefined : C(d) });
 
+// Which shape and which colours each item's icon uses.
 const ICONS = {
   powerGlove: ["glove", abc(100, 430, 430)],
   apple: ["apple", abc(110, 500, 533)],
@@ -334,9 +349,13 @@ const ICONS = {
   lantern: ["lantern", abc(111, 550, 0)],
 };
 
+// Tool icons are put together when asked for: the shape comes from the kind of
+// tool and the colour of its head from what it is made of.
 const TOOL_SHAPE = { [TOOL.SHOVEL]: "shovel", [TOOL.HOE]: "hoe", [TOOL.SWORD]: "sword", [TOOL.PICK]: "pick", [TOOL.AXE]: "axe" };
 const TIER_HEAD = [431, 333, 555, 550, 55];
 
+// The sets of colours for the drawings above, one colour per letter. "white"
+// and "black" paint every letter the same colour, for hit flashes and shadows.
 const PALETTES = {
   player: { o: C(100), s: C(532), c: C(220) },
   zombie_g: { o: C(10), s: C(252), c: C(50) },
@@ -363,6 +382,8 @@ const PALETTES = {
   boltFlash: { a: C(555), b: C(555) },
 };
 
+// Every drawing, by name. The second walking frames and all the zombie frames
+// are made from the player's body by the two functions above.
 const SPRITES = {
   body_down_0: BODY_DOWN_A,
   body_down_1: otherFoot(BODY_DOWN_A),
@@ -392,6 +413,7 @@ const SPRITES = {
   bolt: BOLT,
 };
 
+// Which palette each piece of furniture is painted with.
 const FURNITURE_PAL = { workbench: "wood", chest: "wood", oven: "stone", furnace: "furnace", anvil: "metal", lantern: "lantern" };
 
 // Throws if any drawing has a ragged row or uses a letter its palette lacks.
@@ -413,8 +435,13 @@ export function validateSprites() {
   return Object.keys(SPRITES).length + Object.keys(ICONS).length;
 }
 
+// Finished pictures, so each drawing is only turned into a picture once for
+// each palette and flip.
 const cache = new Map();
 
+// Turn a drawing and a palette into a small picture, mirrored if asked. A
+// letter missing from the palette comes out bright pink, so the mistake is easy
+// to spot.
 function bake(rows, pal, flipX, flipY) {
   const w = rows[0].length;
   const h = rows.length;
@@ -444,6 +471,7 @@ export function sprite(name, palName, flipX = false, flipY = false) {
   return cv;
 }
 
+// The picture for a piece of furniture.
 export function furnitureSprite(kind, white = false) {
   return sprite(kind, white ? "white" : FURNITURE_PAL[kind] || "wood");
 }
