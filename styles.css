@@ -56,8 +56,12 @@ body.touch-on #wrap {
 }
 
 /* Fill the screen without cropping: as wide as it goes, or as tall as it goes. */
+/* Keep clear of the notch and the home bar, which phones draw over the page. */
 body.touch-on #game {
-  width: min(100vw, 100dvh * 4 / 3);
+  width: min(
+    100vw - env(safe-area-inset-left) - env(safe-area-inset-right),
+    (100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * 4 / 3
+  );
   box-shadow: none;
   touch-action: none;
 }
@@ -66,12 +70,11 @@ body.touch-on #hint {
   display: none;
 }
 
-/* Held upright, the game sits at the top and the controls get the space below. */
-@media (orientation: portrait) {
-  body.touch-on #wrap {
-    justify-content: flex-start;
-    padding-top: env(safe-area-inset-top);
-  }
+/* The picture sits at the top: upright, the controls get the space below;
+   sideways, it keeps the picture off the home bar at the bottom. */
+body.touch-on #wrap {
+  justify-content: flex-start;
+  padding-top: env(safe-area-inset-top);
 }
 
 .touch {
@@ -122,7 +125,8 @@ body.touch-on #hint {
 }
 
 .touch-btn,
-.touch-pause {
+.touch-pause,
+.touch-full {
   font: inherit;
   color: #fff;
   background: rgba(255, 255, 255, 0.14);
@@ -190,15 +194,29 @@ body.touch-on #hint {
   }
 }
 
-/* Held upright, keep pause off the picture: tuck it just under the game. */
+/* Full screen sits beside pause. It is only added where the browser allows it. */
+.touch-full {
+  position: absolute;
+  top: calc(var(--edge) + env(safe-area-inset-top));
+  right: calc(var(--edge) + 54px + env(safe-area-inset-right));
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+/* Held upright, keep both off the picture: tuck them just under the game. */
 @media (orientation: portrait) {
-  .touch-pause {
+  .touch-pause,
+  .touch-full {
     top: calc(100vw * 3 / 4 + var(--edge) + env(safe-area-inset-top));
   }
 }
 
 .touch-btn.held,
-.touch-pause.held {
+.touch-pause.held,
+.touch-full:active {
   background: rgba(255, 255, 255, 0.4);
 }
 

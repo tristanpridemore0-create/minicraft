@@ -34,6 +34,8 @@ Gather resources, craft through wood → rock → iron → gold → gem tools, r
 
 On a phone or tablet, on-screen controls appear by themselves: a thumb pad to move, **C** and **X** buttons that do what those keys do, and a pause button in the corner. Add `?touch=1` to the address to see them on a computer, or `?touch=0` to turn them off.
 
+To play full screen on a phone, with no address bar: on an iPhone, open the game in Safari, tap **Share**, then **Add to Home Screen**, and start it from the new icon. On Android, use the full-screen button next to pause, or **Add to Home screen** from the browser menu.
+
 You hold one item at a time. Press **X** to open your pack, pick something with up and down, and press **C** to take it in hand. Closing the pack without choosing leaves your hands empty.
 
 **C** then does whatever that item is for:

@@ -109,6 +109,22 @@ function build(game) {
   const note = el("div", "touch-zoom-note", "Zoomed in. Pinch out to fix.");
 
   root.append(pad, buttons, pause, note);
+
+  // A full-screen button, where the browser can do it. iPhones cannot from
+  // inside Safari; there the way to lose the address bar is to add the game
+  // to the home screen. Opened from there it is already full screen, so the
+  // button is left out.
+  const installed = matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches || navigator.standalone;
+  const page = document.documentElement;
+  if (!installed && document.fullscreenEnabled && page.requestFullscreen) {
+    const full = el("button", "touch-full", "[ ]");
+    full.setAttribute("aria-label", "Full screen");
+    full.addEventListener("pointerup", () => {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else page.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
+    });
+    root.append(full);
+  }
   document.body.classList.add("touch-on");
   document.body.append(root);
 
