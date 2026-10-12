@@ -1,4 +1,5 @@
 export function checkProgress(game) {
+  if (game.build) return;
   const p = game.player;
   const has = (id) => p.inv.has(id) || (p.held && p.held.id === id);
   const tell = (flag, text) => {

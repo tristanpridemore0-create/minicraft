@@ -50,6 +50,14 @@ Every swing costs stamina. Run out and you are worn out for a moment: the stamin
 
 You start with a **workbench** and a **power glove** in your pack and nothing in your hands. Punch a tree for wood, put the workbench down, and craft wooden tools.
 
+## Build mode
+
+Pick **Build mode** on the title screen for a world to build in and explore with no danger. There are no monsters and no Air Wizard, nothing hurts you, you never tire, and you can see further underground. You start with gem tools, every kind of furniture and a stack of things to place, and none of it runs out. Everything breaks in one hit.
+
+In build mode only, **Stone** can be put down as a rock wall, so you can build with it. Break a wall again with the pickaxe.
+
+There is one save slot, shared between build mode and the normal game.
+
 ## Progression
 
 1. Wood tools at a workbench

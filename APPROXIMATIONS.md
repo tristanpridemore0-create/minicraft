@@ -68,3 +68,7 @@ Workbench, chest, oven, furnace, anvil, and lantern match published recipes. Che
 Original defaults were arrows, C (attack), X (menu). This build also binds WASD, Space, and E, and allows rebinding.
 
 The on-screen touch controls are an addition; the original was keyboard only.
+
+## Build mode
+
+Build mode is an addition; the original had one way to play. Placing stone as a wall exists only there.
