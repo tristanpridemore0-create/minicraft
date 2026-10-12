@@ -78,6 +78,15 @@ Progress is stored in the browser (`localStorage`), so it stays on that device a
 
 The same numeric seed regenerates the same terrain; tile edits, crop growth, your pack and score, furniture, dropped items, and the Air Wizard's health are stored as a save overlay. Monsters are not saved; the world repopulates on load.
 
+## Publishing
+
+The game is published at https://minicraft.doublec.biz by Cloudflare. There is no build step: the files in this folder are the website.
+
+- `wrangler.jsonc` tells Cloudflare which site this is.
+- `.assetsignore` lists the files that are part of the project but not the website, such as this README. Anything not listed there is published, so add a line for any new file that should stay private to the repo.
+
+Once the repo is connected to Cloudflare, every merge to `main` publishes itself.
+
 ## Notes
 
 See `APPROXIMATIONS.md` for what follows the original game's rules and what is this project's own.

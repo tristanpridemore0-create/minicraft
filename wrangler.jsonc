@@ -1,0 +1,8 @@
+{
+  // Cloudflare reads this to publish the game. The name must match the
+  // Worker it is attached to. There is no build step: the files in this
+  // folder are the website, apart from the ones listed in .assetsignore.
+  "name": "minicraft",
+  "compatibility_date": "2026-01-01",
+  "assets": { "directory": "." }
+}
