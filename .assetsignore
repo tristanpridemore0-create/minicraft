@@ -11,3 +11,5 @@ wrangler.jsonc
 package.json
 README.md
 APPROXIMATIONS.md
+AGENTS.md
+CLAUDE.md
