@@ -27,23 +27,26 @@ Gather resources, craft through wood → rock → iron → gold → gem tools, r
 | Action | Keys |
 | --- | --- |
 | Move | WASD or arrows |
-| Attack / confirm | Space or C |
-| Use / inventory | E or X |
+| Attack / use the item in your hand | C or Space |
+| Inventory / open furniture | X or E |
 | Pause | Escape |
 | Drop item (in inventory) | Q |
 
-In menus, up and down move the cursor, attack confirms and E, X or Escape closes. In a chest, left and right switch between the chest and your pack.
+You hold one item at a time. Press **X** to open your pack, pick something with up and down, and press **C** to take it in hand. Closing the pack without choosing leaves your hands empty.
 
-Face a tile or furniture and press **use**:
+**C** then does whatever that item is for:
 
-- Most items, nothing in front of you: open inventory
-- Power glove: pick up furniture (hold anything else to open it instead)
-- Furniture in hand: place it
-- Facing a workbench, oven, furnace, or anvil: crafting
-- Facing a chest: transfer items
-- Food: eat if you have stamina and missing health
+- Empty hands or a tool: hit what is in front of you. The right tool does far more (axe on trees, pickaxe on rock and ore, shovel and hoe on the ground).
+- Furniture: put it down.
+- Power glove: pick furniture up.
+- Seeds, acorns, flowers, sand, dirt: plant or place them.
+- Food: eat it, if you are hurt and have 5 stamina to spare.
 
-You start with a **power glove** and a **workbench**. Place the bench, punch trees, then craft wooden tools.
+Walk up against a workbench, oven, furnace, anvil or chest and press **X** to open it. In a chest, left and right switch between the chest and your pack.
+
+Every swing costs stamina. Run out and you are worn out for a moment: the stamina row flashes, you move at half speed, and nothing comes back until it stops.
+
+You start with a **workbench** and a **power glove** in your pack and nothing in your hands. Punch a tree for wood, put the workbench down, and craft wooden tools.
 
 ## Progression
 
@@ -59,8 +62,8 @@ You start with a **power glove** and a **workbench**. Place the bench, punch tre
 
 Progress is stored in the browser (`localStorage`). The game autosaves about every two minutes. Pause → Save also works.
 
-The same numeric seed regenerates the same terrain; tile edits, inventory, and furniture are stored as a save overlay.
+The same numeric seed regenerates the same terrain; tile edits, crop growth, your pack and score, furniture, dropped items, and the Air Wizard's health are stored as a save overlay. Monsters are not saved; the world repopulates on load.
 
 ## Notes
 
-See `APPROXIMATIONS.md` for behaviors that could not be verified against the original binary and were implemented from public descriptions.
+See `APPROXIMATIONS.md` for what follows the original game's rules and what is this project's own.

@@ -360,6 +360,7 @@ const PALETTES = {
   heartEmpty: { a: C(100), b: C(0), c: C(0) },
   bolt: { a: C(220), b: C(550) },
   boltEmpty: { a: C(110), b: C(0) },
+  boltFlash: { a: C(555), b: C(555) },
 };
 
 const SPRITES = {

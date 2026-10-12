@@ -15,6 +15,14 @@ export class Inventory {
     else this.slots.push({ id, count, extra: null });
   }
 
+  // Put a slot back at the top of the pack, stacking onto a matching pile.
+  putFront(slot) {
+    if (!slot) return;
+    const found = !slot.extra && this.slots.find((s) => s.id === slot.id && !s.extra);
+    if (found) found.count += slot.count;
+    else this.slots.unshift({ id: slot.id, count: slot.count, extra: slot.extra || null });
+  }
+
   count(id) {
     return this.slots.filter((s) => s.id === id).reduce((n, s) => n + s.count, 0);
   }

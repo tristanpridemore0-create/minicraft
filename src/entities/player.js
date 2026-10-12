@@ -1,58 +1,73 @@
 import { Entity } from "./entity.js";
-import { DIR, TILE } from "../constants.js";
+import { DIR, TILE, MAP } from "../constants.js";
 import { Inventory } from "../items/inventory.js";
-import { itemDef } from "../items/defs.js";
-import { playerAttack } from "../combat/combat.js";
+import { itemDef, attackBonus } from "../items/defs.js";
 import { Furniture } from "./furniture.js";
-import { Tile, contactDamage } from "../world/tiles.js";
+import { Tile, contactDamage, walkable } from "../world/tiles.js";
 import { TextParticle } from "./particles.js";
 import { C } from "../render/palette.js";
+
+const rnd = (n) => (Math.random() * n) | 0;
 
 export class Player extends Entity {
   constructor(x, y) {
     super(x, y);
     this.type = "player";
-    this.health = 10;
-    this.maxHealth = 10;
-    this.stamina = 10;
-    this.maxStamina = 10;
+    this.health = this.maxHealth = 10;
+    this.stamina = this.maxStamina = 10;
     this.staminaRecharge = 0;
-    this.dir = DIR.DOWN;
+    // Counts down after running out of stamina; nothing recharges until it ends.
+    this.staminaRechargeDelay = 0;
     this.inv = new Inventory([
-      { id: "powerGlove", count: 1 },
       { id: "workbench", count: 1 },
+      { id: "powerGlove", count: 1 },
     ]);
-    this.active = 0;
+    // The item in hand. It lives outside the inventory, and may be nothing.
+    this.held = null;
     this.attackTime = 0;
+    this.attackDir = DIR.DOWN;
+    this.attackItem = null;
     this.invuln = 0;
-    this.walk = 0;
+    this.tickTime = 0;
+    this.onStairDelay = 0;
     this.swimming = false;
     this.bumped = null;
-    this.xr = 5;
-    this.yr = 6;
+    this.score = 0;
+    this.xr = 4;
+    this.yr = 3;
   }
 
   activeItem() {
-    const s = this.inv.slots[this.active];
-    return s ? itemDef(s.id) : null;
+    return this.held ? itemDef(this.held.id) : null;
   }
 
   activeSlot() {
-    return this.inv.slots[this.active] || null;
+    return this.held;
   }
 
   canSwim() {
     return true;
   }
 
-  hurtFrom(amt, sx, sy, game) {
-    if (this.invuln > 0 || this.hurtTime > 0) return;
+  payStamina(cost) {
+    if (cost > this.stamina) return false;
+    if (cost > 0) this.stamina -= cost;
+    return true;
+  }
+
+  // Use up one of whatever is in hand.
+  spendHeld() {
+    if (this.held && --this.held.count <= 0) this.held = null;
+  }
+
+  hurtFrom(amt, dir, game) {
+    if (this.invuln > 0 || this.hurtTime > 0 || game.dead) return;
     this.health -= amt;
+    this.level.add(new TextParticle(amt, this.x, this.y, C(504)));
+    this.knockback(dir);
     this.hurtTime = 10;
     this.invuln = 30;
-    this.level.add(new TextParticle(amt, this.x, this.y, C(504)));
     game.audio.hurt();
-    this.knock(Math.sign(this.x - sx) * 3, Math.sign(this.y - sy) * 3);
     if (this.health <= 0) {
       this.health = 0;
       game.dead = true;
@@ -60,27 +75,34 @@ export class Player extends Entity {
     }
   }
 
+  heal(amt) {
+    this.level.add(new TextParticle(amt, this.x, this.y, C(50)));
+    this.health = Math.min(this.maxHealth, this.health + amt);
+  }
+
   tick(game) {
     super.tick();
+    this.tickTime++;
     if (this.invuln > 0) this.invuln--;
     if (this.attackTime > 0) this.attackTime--;
 
-    const env = this.level.liquidAt(this.x, this.y);
-    const swimming = env.water;
-    this.swimming = swimming;
-    if (env.lava && this.invuln === 0) this.hurtFrom(3, this.x, this.y, game);
+    const tile = this.level.tileAtPixel(this.x, this.y);
+    this.swimming = tile === Tile.water || tile === Tile.lava;
+    if (tile === Tile.lava) this.hurtFrom(4, this.dir ^ 1, game);
 
-    if (swimming) {
-      this.staminaRecharge = 0;
-      if (game.tick % 10 === 0) {
-        if (this.stamina > 0) this.stamina--;
-        else if (this.invuln === 0) this.hurtFrom(1, this.x, this.y, game);
-      }
-    } else if (this.attackTime === 0) {
+    this.checkStairs(game, tile);
+
+    // Hitting zero stamina means a 40-tick wait before any comes back.
+    if (this.stamina <= 0 && this.staminaRechargeDelay === 0 && this.staminaRecharge === 0) {
+      this.staminaRechargeDelay = 40;
+    }
+    if (this.staminaRechargeDelay > 0) this.staminaRechargeDelay--;
+    if (this.staminaRechargeDelay === 0) {
       this.staminaRecharge++;
-      if (this.staminaRecharge > 8 && this.stamina < this.maxStamina) {
-        this.stamina++;
-        this.staminaRecharge = 0;
+      if (this.swimming) this.staminaRecharge = 0;
+      while (this.staminaRecharge > 10) {
+        this.staminaRecharge -= 10;
+        if (this.stamina < this.maxStamina) this.stamina++;
       }
     }
 
@@ -90,38 +112,28 @@ export class Player extends Entity {
     if (game.input.held("down")) ya++;
     if (game.input.held("left")) xa--;
     if (game.input.held("right")) xa++;
-    if (this.stamina <= 0 && swimming) {
-      xa = 0;
-      ya = 0;
-    } else if (this.stamina <= 0) {
-      if (game.tick % 2 !== 0) {
-        xa = 0;
-        ya = 0;
-      }
-    }
-    if (ya > 0) this.dir = DIR.DOWN;
-    else if (ya < 0) this.dir = DIR.UP;
-    else if (xa < 0) this.dir = DIR.LEFT;
-    else if (xa > 0) this.dir = DIR.RIGHT;
-    if (xa || ya) {
-      this.bumped = null;
-      this.move(xa, ya);
-      this.walk++;
-      // Walking into a cactus or an ore vein hurts; standing beside one does not.
-      if (this.bumped) this.hurtFrom(this.bumped.dmg, this.bumped.x, this.bumped.y, game);
+
+    // Swimming costs a point of stamina a second, then a point of health.
+    if (this.swimming && this.tickTime % 60 === 0) {
+      if (this.stamina > 0) this.stamina--;
+      else this.hurtFrom(1, this.dir ^ 1, game);
     }
 
-    if (game.input.just("attack") && this.attackTime === 0 && this.stamina > 0) {
-      const item = this.activeItem();
-      const cost = item && item.stamina ? item.stamina : 1;
-      this.attackTime = 10;
-      this.stamina = Math.max(0, this.stamina - Math.min(cost, this.stamina));
-      playerAttack(game, this);
+    // While worn out you only move every other tick.
+    if (this.staminaRechargeDelay % 2 === 0) {
+      this.bumped = null;
+      this.walkMove(xa, ya);
+      // Walking into a cactus or an ore vein hurts; standing beside one does not.
+      if (this.bumped) this.hurtFrom(this.bumped, this.dir ^ 1, game);
+    }
+
+    if (game.input.just("attack") && this.stamina > 0) {
+      this.stamina--;
+      this.staminaRecharge = 0;
+      this.attack(game);
     }
 
     if (game.input.just("menu")) game.tryUseOrMenu();
-
-    this.checkStairs(game);
   }
 
   // Called by move() when a step is blocked: note the most harmful tile touched.
@@ -133,77 +145,117 @@ export class Player extends Entity {
     for (let ty = y0; ty <= y1; ty++) {
       for (let tx = x0; tx <= x1; tx++) {
         const dmg = contactDamage(this.level.get(tx, ty));
-        if (dmg && (!this.bumped || dmg > this.bumped.dmg)) this.bumped = { dmg, x: tx * TILE + 8, y: ty * TILE + 8 };
+        if (dmg && (!this.bumped || dmg > this.bumped)) this.bumped = dmg;
       }
     }
   }
 
-  checkStairs(game) {
-    const t = this.level.tileAtPixel(this.x, this.y);
-    const on = t === Tile.stairsDown || t === Tile.stairsUp;
-    if (!on) {
-      game.stairLock = 0;
+  checkStairs(game, tile) {
+    if (tile !== Tile.stairsDown && tile !== Tile.stairsUp) {
+      if (this.onStairDelay > 0) this.onStairDelay--;
       return;
     }
-    if (t === Tile.stairsDown) {
-      const dest = this.level.id - 1;
-      if (game.levels[dest]) game.changeLevel(dest, this.x, this.y);
-    } else if (t === Tile.stairsUp) {
-      const dest = this.level.id + 1;
-      if (game.levels[dest]) game.changeLevel(dest, this.x, this.y);
-    }
+    if (this.onStairDelay === 0) game.changeLevel(tile === Tile.stairsUp ? 1 : -1);
+    this.onStairDelay = 10;
   }
 
-  useFacing(game) {
+  // The area just in front of the player, `range` pixels deep.
+  frontBox(range) {
+    const { x } = this;
+    const y = this.y - 2;
+    if (this.dir === DIR.DOWN) return [x - 8, y + 4, x + 8, y + range];
+    if (this.dir === DIR.UP) return [x - 8, y - range, x + 8, y - 4];
+    if (this.dir === DIR.RIGHT) return [x + 4, y - 8, x + range, y + 8];
+    return [x - range, y - 8, x - 4, y + 8];
+  }
+
+  frontTile() {
+    let px = this.x;
+    let py = this.y - 2;
+    if (this.dir === DIR.DOWN) py += 12;
+    if (this.dir === DIR.UP) py -= 12;
+    if (this.dir === DIR.LEFT) px -= 12;
+    if (this.dir === DIR.RIGHT) px += 12;
+    return { tx: Math.floor(px / TILE), ty: Math.floor(py / TILE) };
+  }
+
+  // The attack key does whatever the item in hand is for. Only when that
+  // comes to nothing, and only bare-handed or with a tool, does it hit.
+  attack(game) {
+    this.walk += 8;
+    this.attackDir = this.dir;
     const item = this.activeItem();
-    const slot = this.activeSlot();
-    const { tx, ty } = this.facingTile(this.dir);
-    const px = tx * TILE + 8;
-    const py = ty * TILE + 8;
+    this.attackItem = this.held ? this.held.id : null;
+    const level = this.level;
+    const { tx, ty } = this.frontTile();
+    const inMap = tx >= 0 && ty >= 0 && tx < MAP && ty < MAP;
 
-    const furn = this.level.entities.find(
-      (e) => e.type === "furniture" && !e.removed && Math.abs(e.x - px) < 14 && Math.abs(e.y - py) < 14
-    );
+    if (item) {
+      this.attackTime = 10;
+      if (item.id === "powerGlove") {
+        const furn = level.entitiesIn(...this.frontBox(12), this).find((e) => e.type === "furniture");
+        if (furn) {
+          // The glove goes back in the pack and the furniture comes to hand.
+          furn.removed = true;
+          this.inv.putFront(this.held);
+          this.held = { id: furn.kind, count: 1, extra: furn.inv ? furn.inv.toJSON() : null };
+          game.audio.pickup();
+          return;
+        }
+      }
+      if (inMap && (this.useHeldOn(tx, ty, item) || level.interact(tx, ty, this, item))) {
+        game.audio.hit();
+        return;
+      }
+    }
 
-    if (item && item.id === "powerGlove" && furn) {
-      this.inv.add(furn.kind, 1, furn.kind === "chest" ? furn.inv.toJSON() : null);
-      furn.removed = true;
-      this.active = this.inv.slots.length - 1;
+    if (item && item.tool === undefined) {
+      game.audio.swing();
+      return;
+    }
+
+    this.attackTime = 5;
+    let hit = false;
+    for (const e of level.entitiesIn(...this.frontBox(20), this)) {
+      if (e.type !== "mob" && e.type !== "wizard") continue;
+      e.hurt(rnd(3) + 1 + attackBonus(item), this.attackDir, game);
+      hit = true;
+    }
+    if (inMap && level.hurtTile(tx, ty, rnd(3) + 1)) hit = true;
+    game.audio[hit ? "hit" : "swing"]();
+  }
+
+  // Putting down, planting or eating the item in hand.
+  useHeldOn(tx, ty, item) {
+    const level = this.level;
+    if (item.kind === "furniture") {
+      const cx = tx * TILE + 8;
+      const cy = ty * TILE + 8;
+      const taken = level.entitiesIn(cx - 3, cy - 3, cx + 3, cy + 3).some((e) => e.type === "furniture");
+      if (taken || !walkable(level.get(tx, ty), false)) return false;
+      level.add(new Furniture(cx, cy, item.furniture, this.held.extra || []));
+      this.spendHeld();
       return true;
     }
-
-    if (item && item.kind === "furniture") {
-      if (!this.level.blocked(px, py, 6, 6, true)) {
-        const extra = slot.extra;
-        this.inv.takeAt(this.active);
-        this.level.add(new Furniture(px, py, item.furniture, extra || []));
-        if (this.active >= this.inv.slots.length) this.active = Math.max(0, this.inv.slots.length - 1);
-        return true;
-      }
+    if (item.kind === "food") {
+      if (this.health >= this.maxHealth || !this.payStamina(item.staminaCost)) return false;
+      this.heal(item.heal);
+      this.spendHeld();
+      return true;
     }
-
-    if (item && item.kind === "place") {
-      if (this.level.placeItem(tx, ty, item.id)) {
-        this.inv.takeAt(this.active);
-        if (this.active >= this.inv.slots.length) this.active = Math.max(0, this.inv.slots.length - 1);
-        return true;
-      }
-    }
-
-    if (item && item.kind === "food") {
-      if (this.stamina >= item.staminaCost && this.health < this.maxHealth) {
-        this.stamina -= item.staminaCost;
-        this.health = Math.min(this.maxHealth, this.health + item.heal);
-        this.inv.takeAt(this.active);
-        if (this.active >= this.inv.slots.length) this.active = Math.max(0, this.inv.slots.length - 1);
-        return true;
-      }
-    }
-
-    if (furn && furn.kind !== "lantern") {
-      game.openStation(furn);
+    if (item.kind === "place") {
+      if (!level.plant(tx, ty, item)) return false;
+      this.spendHeld();
       return true;
     }
     return false;
+  }
+
+  // The menu key: open whatever furniture is in front. False if there is none.
+  use(game) {
+    const furn = this.level.entitiesIn(...this.frontBox(12), this).find((e) => e.type === "furniture" && e.kind !== "lantern");
+    if (!furn) return false;
+    game.openStation(furn);
+    return true;
   }
 }

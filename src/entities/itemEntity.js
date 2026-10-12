@@ -1,5 +1,11 @@
 import { Entity } from "./entity.js";
 
+function gaussian() {
+  const u = 1 - Math.random();
+  const v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
 export class ItemEntity extends Entity {
   constructor(x, y, itemId, count = 1) {
     super(x, y);
@@ -8,52 +14,58 @@ export class ItemEntity extends Entity {
     this.count = count;
     this.xr = 3;
     this.yr = 3;
-    this.life = 60 * 45;
-    this.pickupDelay = 20;
-    this.vx = (Math.random() - 0.5) * 2;
-    this.vy = (Math.random() - 0.5) * 2;
-    this.fx = 0;
-    this.fy = 0;
-    // Height above the ground, for the drop-and-bounce; purely for show.
+    this.time = 0;
+    this.lifeTime = 600 + ((Math.random() * 60) | 0);
+    // Exact position, and height above the ground for the drop-and-bounce.
+    this.xx = x;
+    this.yy = y;
     this.zz = 2;
+    this.xa = gaussian() * 0.3;
+    this.ya = gaussian() * 0.2;
     this.za = Math.random() * 0.7 + 1;
   }
 
   tick(game) {
-    super.tick();
-    this.life--;
-    if (this.life <= 0) this.removed = true;
-    if (this.pickupDelay > 0) this.pickupDelay--;
-    // Scatter a few pixels and settle. Whole-pixel steps are taken only once
-    // enough speed has built up, so a fading velocity really does stop.
-    this.fx += this.vx;
-    this.fy += this.vy;
-    const mx = Math.trunc(this.fx);
-    const my = Math.trunc(this.fy);
-    if (mx || my) {
-      this.move(mx, my);
-      this.fx -= mx;
-      this.fy -= my;
+    if (++this.time >= this.lifeTime) {
+      this.removed = true;
+      return;
     }
-    this.vx *= 0.8;
-    this.vy *= 0.8;
+    this.xx += this.xa;
+    this.yy += this.ya;
     this.zz += this.za;
     if (this.zz < 0) {
       this.zz = 0;
       this.za *= -0.5;
+      this.xa *= 0.6;
+      this.ya *= 0.6;
     }
     this.za -= 0.15;
-    if (this.pickupDelay <= 0 && game.player && this.overlaps(game.player)) {
-      game.player.inv.add(this.itemId, this.count);
+    // Take whole-pixel steps toward the exact position; if a wall stops us,
+    // pull the exact position back to where we really are.
+    const ox = this.x;
+    const oy = this.y;
+    const wantX = (this.xx | 0) - ox;
+    const wantY = (this.yy | 0) - oy;
+    this.move(wantX, wantY);
+    this.xx += this.x - ox - wantX;
+    this.yy += this.y - oy - wantY;
+
+    const p = game.player;
+    if (this.time > 30 && p && !game.dead && this.overlaps(p)) {
+      p.inv.add(this.itemId, this.count);
+      p.score++;
       game.audio.pickup();
       this.removed = true;
     }
   }
 }
 
+// Scatter drops around a point, each within a few pixels of it.
 export function dropItems(level, x, y, drops) {
   for (const d of drops) {
     if (!d || !d.n) continue;
-    level.add(new ItemEntity(x + (Math.random() * 6 - 3), y + (Math.random() * 6 - 3), d.id, d.n));
+    for (let i = 0; i < d.n; i++) {
+      level.add(new ItemEntity(x + ((Math.random() * 11) | 0) - 5, y + ((Math.random() * 11) | 0) - 5, d.id, 1));
+    }
   }
 }

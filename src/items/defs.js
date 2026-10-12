@@ -2,8 +2,8 @@ import { TIER, TOOL } from "../constants.js";
 
 export const ITEMS = {
   powerGlove: { id: "powerGlove", name: "Pow glove", kind: "tool", sprite: "glove" },
-  apple: { id: "apple", name: "Apple", kind: "food", heal: 1, staminaCost: 6, sprite: "apple" },
-  bread: { id: "bread", name: "Bread", kind: "food", heal: 2, staminaCost: 6, sprite: "bread" },
+  apple: { id: "apple", name: "Apple", kind: "food", heal: 1, staminaCost: 5, sprite: "apple" },
+  bread: { id: "bread", name: "Bread", kind: "food", heal: 2, staminaCost: 5, sprite: "bread" },
   wood: { id: "wood", name: "Wood", kind: "resource", sprite: "wood" },
   acorn: { id: "acorn", name: "Acorn", kind: "place", place: "sapling", sprite: "acorn" },
   cactus: { id: "cactus", name: "Cactus", kind: "place", place: "cactusSapling", sprite: "cactusItem" },
@@ -54,7 +54,6 @@ for (const [tierName, tier] of Object.entries(TIER)) {
       tool,
       tier,
       sprite: id,
-      stamina: Math.max(1, 5 - tier) + (tool === TOOL.PICK ? 2 : 0),
     };
     ITEMS[id] = TOOL_ITEMS[id];
   }
@@ -72,21 +71,12 @@ export function toolCost(tier) {
   return { ...TIER_COST[tier] };
 }
 
-export function toolBonus(item, target) {
-  if (!item || item.kind !== "tool") return 0;
-  const t = item.tier ?? 0;
-  if (item.tool === TOOL.SWORD && target === "mob") return 2 + t * 2;
-  if (item.tool === TOOL.AXE && (target === "tree" || target === "mob")) return 1 + t;
-  if (item.tool === TOOL.PICK && (target === "rock" || target === "ore")) return 2 + t * 2;
-  if (item.tool === TOOL.SHOVEL && target === "floor") return 1 + t;
-  if (item.tool === TOOL.HOE && target === "farm") return 1 + t;
-  return t;
-}
-
-export function canMineOre(item) {
-  return !!item && item.tool === TOOL.PICK;
-}
-
-export function canMineHardRock(item) {
-  return item && item.tool === TOOL.PICK && item.tier >= TIER.GEM;
+// Extra damage a tool adds to a hit on a monster, on top of the 1-3 of a
+// bare punch. Swords and axes are weapons; other tools add 1.
+export function attackBonus(item) {
+  if (!item || item.tool === undefined) return 0;
+  const lvl = item.tier;
+  if (item.tool === TOOL.AXE) return (lvl + 1) * 2 + ((Math.random() * 4) | 0);
+  if (item.tool === TOOL.SWORD) return (lvl + 1) * 3 + ((Math.random() * (2 + lvl * lvl * 2)) | 0);
+  return 1;
 }

@@ -298,6 +298,12 @@ function stairsPix(up) {
   };
 }
 
+// Two prints left in sand that was walked on a moment ago.
+function footprintPix(x, y) {
+  const mark = (cx, cy) => (x === cx || x === cx + 1) && y >= cy && y <= cy + 2;
+  return mark(3, 2) || mark(11, 10) ? C(440) : null;
+}
+
 function farmPix(dc) {
   return (x, y) => {
     const r = y % 4;
@@ -350,6 +356,7 @@ export function drawTile(ctx, level, tx, ty, sx, sy, tick) {
       break;
     case Tile.sand:
       ground(ctx, level, tx, ty, sx, sy, "sand", connSand, tick);
+      if (level.getData(tx, ty) > 0) overlay(ctx, "footprint", sx, sy, footprintPix);
       break;
     case Tile.cactus:
       ground(ctx, level, tx, ty, sx, sy, "sand", connSand, tick);
