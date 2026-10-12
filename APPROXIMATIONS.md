@@ -66,3 +66,5 @@ Workbench, chest, oven, furnace, anvil, and lantern match published recipes. Che
 ## Key bindings
 
 Original defaults were arrows, C (attack), X (menu). This build also binds WASD, Space, and E, and allows rebinding.
+
+The on-screen touch controls are an addition; the original was keyboard only.

@@ -32,6 +32,8 @@ Gather resources, craft through wood → rock → iron → gold → gem tools, r
 | Pause | Escape |
 | Drop item (in inventory) | Q |
 
+On a phone or tablet, on-screen controls appear by themselves: a thumb pad to move, **C** and **X** buttons that do what those keys do, and a pause button in the corner. Add `?touch=1` to the address to see them on a computer, or `?touch=0` to turn them off.
+
 You hold one item at a time. Press **X** to open your pack, pick something with up and down, and press **C** to take it in hand. Closing the pack without choosing leaves your hands empty.
 
 **C** then does whatever that item is for:

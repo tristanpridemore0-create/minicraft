@@ -36,3 +36,166 @@ body {
   letter-spacing: 0.04em;
   opacity: 0.7;
 }
+
+/* On-screen controls (src/touch.js). Everything below only applies once the
+   controls are switched on, which adds .touch-on to <body>. */
+
+body.touch-on {
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+
+body.touch-on #wrap {
+  padding: 0;
+  gap: 0;
+}
+
+/* Fill the screen without cropping: as wide as it goes, or as tall as it goes. */
+body.touch-on #game {
+  width: min(100vw, 100dvh * 4 / 3);
+  box-shadow: none;
+  touch-action: none;
+}
+
+body.touch-on #hint {
+  display: none;
+}
+
+/* Held upright, the game sits at the top and the controls get the space below. */
+@media (orientation: portrait) {
+  body.touch-on #wrap {
+    justify-content: flex-start;
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+.touch {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  --pad: min(40vmin, 180px);
+  --btn: min(22vmin, 92px);
+  --edge: max(14px, 3vmin);
+}
+
+.touch > * {
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch-pad {
+  position: absolute;
+  left: calc(var(--edge) + env(safe-area-inset-left));
+  bottom: calc(var(--edge) + env(safe-area-inset-bottom));
+  width: var(--pad);
+  height: var(--pad);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.28);
+}
+
+.touch-knob {
+  position: absolute;
+  left: 30%;
+  top: 30%;
+  width: 40%;
+  height: 40%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.42);
+  pointer-events: none;
+}
+
+.touch-buttons {
+  position: absolute;
+  right: calc(var(--edge) + env(safe-area-inset-right));
+  bottom: calc(var(--edge) + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: flex-end;
+  gap: calc(var(--btn) * 0.22);
+}
+
+.touch-btn,
+.touch-pause {
+  font: inherit;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  border: 2px solid rgba(255, 255, 255, 0.32);
+  padding: 0;
+}
+
+.touch-btn {
+  width: var(--btn);
+  height: var(--btn);
+  border-radius: 50%;
+  font-size: calc(var(--btn) * 0.4);
+  font-weight: bold;
+  line-height: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The use button sits higher, where the thumb rests. */
+.touch-c {
+  margin-bottom: calc(var(--btn) * 0.45);
+}
+
+.touch-label {
+  font-size: calc(var(--btn) * 0.17);
+  font-weight: normal;
+  letter-spacing: 0.06em;
+  opacity: 0.8;
+  margin-top: 0.15em;
+}
+
+.touch-pause {
+  position: absolute;
+  top: calc(var(--edge) + env(safe-area-inset-top));
+  right: calc(var(--edge) + env(safe-area-inset-right));
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+}
+
+/* Held sideways, the controls live in the black bars beside the picture, so
+   stack the buttons into a narrow column instead of spreading them over it. */
+@media (orientation: landscape) {
+  .touch {
+    --pad: min(37vmin, 180px);
+  }
+
+  .touch-buttons {
+    flex-direction: column-reverse;
+    align-items: flex-end;
+    gap: calc(var(--btn) * 0.12);
+  }
+
+  .touch-c {
+    margin-bottom: 0;
+  }
+
+  .touch-x {
+    margin-right: calc(var(--btn) * 0.55);
+  }
+}
+
+/* Held upright, keep pause off the picture: tuck it just under the game. */
+@media (orientation: portrait) {
+  .touch-pause {
+    top: calc(100vw * 3 / 4 + var(--edge) + env(safe-area-inset-top));
+  }
+}
+
+.touch-btn.held,
+.touch-pause.held {
+  background: rgba(255, 255, 255, 0.4);
+}
