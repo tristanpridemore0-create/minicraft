@@ -1,6 +1,11 @@
+// The game's own lettering. Every character is drawn in this file as a tiny
+// grid of dots, so no font file is needed and the text matches the pixel art.
+
 import { C } from "./palette.js";
 
 // Chunky 6x7 glyphs drawn in an 8x8 cell, so 20 characters fit across the screen.
+// `#` is a filled pixel and `.` an empty one. There are only capitals;
+// drawText() turns everything into capitals first.
 const G = {
   A: [".####.", "##..##", "##..##", "######", "##..##", "##..##", "##..##"],
   B: ["#####.", "##..##", "##..##", "#####.", "##..##", "##..##", "#####."],
@@ -58,6 +63,7 @@ const G = {
   _: ["......", "......", "......", "......", "......", "......", "######"],
 };
 
+// The characters in a fixed order, and each one's place in that order.
 const CHARS = Object.keys(G);
 const INDEX = Object.fromEntries(CHARS.map((c, i) => [c, i]));
 const sheets = new Map();
@@ -80,6 +86,8 @@ function sheet(color) {
   return s;
 }
 
+// Draw text with its top-left corner at (x, y). A `scale` of 2 draws it double
+// size. Characters the font does not have come out as "?".
 export function drawText(ctx, text, x, y, color = "#ffffff", scale = 1) {
   const img = sheet(color);
   const s = String(text).toUpperCase();
@@ -98,6 +106,7 @@ export function drawTextShadow(ctx, text, x, y, color = "#ffffff") {
   drawText(ctx, text, x, y, color);
 }
 
+// How many pixels wide a piece of text will be. Every character is 8 wide.
 export function textWidth(text, scale = 1) {
   return String(text).length * 8 * scale;
 }
@@ -122,6 +131,8 @@ export function drawFrame(ctx, title, x0, y0, x1, y1) {
   const y = y0 * 8;
   const w = (x1 - x0 + 1) * 8;
   const h = (y1 - y0 + 1) * 8;
+  // A dark outline with the corners nibbled off, then the blue fill, then a
+  // thin pale line just inside the edge.
   ctx.fillStyle = C(1);
   ctx.fillRect(x + 1, y, w - 2, h);
   ctx.fillRect(x, y + 1, w, h - 2);
@@ -132,6 +143,8 @@ export function drawFrame(ctx, title, x0, y0, x1, y1) {
   ctx.fillRect(x + 3, y + h - 3, w - 6, 1);
   ctx.fillRect(x + 2, y + 3, 1, h - 6);
   ctx.fillRect(x + w - 3, y + 3, 1, h - 6);
+  // The title sits on the top edge, on a patch of blue that hides the line
+  // behind it.
   if (title) {
     ctx.fillStyle = C(5);
     ctx.fillRect(x + 7, y, title.length * 8 + 2, 8);

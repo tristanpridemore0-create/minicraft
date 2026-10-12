@@ -1,5 +1,18 @@
+// Every item in the game. Each has an `id` (what the code calls it), a `name`
+// (what the player sees, kept short to fit the screen) and a `kind` that
+// decides what the attack key does with it:
+//
+//   tool       hit or dig with it
+//   food       eat it
+//   place      put it down or plant it on the tile in front
+//   furniture  put it down as an object
+//   resource   nothing on its own; it is used for crafting
+
 import { TIER, TOOL } from "../constants.js";
 
+// `place` names what the item turns into on the ground (see Level.plant), and
+// `heal` and `staminaCost` belong to food. The `sprite` field is not used at
+// the moment: icons are looked up by id in render/sprites.js.
 export const ITEMS = {
   powerGlove: { id: "powerGlove", name: "Pow glove", kind: "tool", sprite: "glove" },
   apple: { id: "apple", name: "Apple", kind: "food", heal: 1, staminaCost: 5, sprite: "apple" },
@@ -31,9 +44,13 @@ export const ITEMS = {
   lantern: { id: "lantern", name: "Lantern", kind: "furniture", furniture: "lantern", light: 8, sprite: "lantern" },
 };
 
+// The 25 tools (five kinds in five materials) are built by the loop below
+// instead of being typed out one by one. These are the pieces their ids and
+// names are made from.
 const TIER_NAME = ["Wood", "Rock", "Iron", "Gold", "Gem"];
 const TOOL_ID = ["shovel", "hoe", "sword", "pick", "axe"];
 const TOOL_NAME = ["Shvl", "Hoe", "Swrd", "Pick", "Axe"];
+// What one tool of each material costs to craft.
 const TIER_COST = {
   [TIER.WOOD]: { wood: 5 },
   [TIER.ROCK]: { wood: 5, stone: 5 },
@@ -44,6 +61,8 @@ const TIER_COST = {
 
 export const TOOL_ITEMS = {};
 
+// Make every material and tool pair, for example the id "woodAxe" with the name
+// "Wood Axe", and add each one to ITEMS as well.
 for (const [tierName, tier] of Object.entries(TIER)) {
   for (const [toolName, tool] of Object.entries(TOOL)) {
     const id = `${tierName.toLowerCase()}${capitalize(TOOL_ID[tool])}`;
@@ -59,14 +78,18 @@ for (const [tierName, tier] of Object.entries(TIER)) {
   }
 }
 
+// "axe" becomes "Axe".
 function capitalize(s) {
   return s[0].toUpperCase() + s.slice(1);
 }
 
+// Look an item up by its id.
 export function itemDef(id) {
   return ITEMS[id];
 }
 
+// The crafting cost of a tool of this material. `{ ...x }` makes a copy, so
+// whoever asks cannot change the original by accident.
 export function toolCost(tier) {
   return { ...TIER_COST[tier] };
 }

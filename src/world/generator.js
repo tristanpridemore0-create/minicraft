@@ -1,7 +1,13 @@
+// Builds the world from a seed number. The same seed always gives the same
+// world, because every "random" choice in here comes from the seed (see rng.js)
+// and never from Math.random().
+
 import { MAP, LEVEL } from "../constants.js";
 import { Tile } from "./tiles.js";
 import { RNG, fbm, hash2 } from "../rng.js";
 
+// Make all five levels and join them with stairs. Each level uses its own
+// variation of the seed so they do not all look alike.
 export function generateWorld(seed) {
   const rng = new RNG(seed);
   const levels = {
@@ -22,22 +28,33 @@ export function generateWorld(seed) {
   return levels;
 }
 
+// An empty level: one number per tile, all zero to start with. A Uint8Array is
+// a compact list of small whole numbers.
 function makeLevel() {
   const tiles = new Uint8Array(MAP * MAP);
   const data = new Uint8Array(MAP * MAP);
   return { tiles, data, w: MAP, h: MAP };
 }
 
+// Write a tile, ignoring positions off the edge of the map. The tiles are one
+// long list, row after row, so the tile at (x, y) is entry number x + y * MAP.
 function set(level, x, y, id) {
   if (x < 0 || y < 0 || x >= MAP || y >= MAP) return;
   level.tiles[x + y * MAP] = id;
 }
 
+// Read a tile. Anything off the edge counts as water.
 function get(level, x, y) {
   if (x < 0 || y < 0 || x >= MAP || y >= MAP) return Tile.water;
   return level.tiles[x + y * MAP];
 }
 
+// The surface. Three separate layers of noise decide what each tile is:
+//
+//   e  height: low is water, a little higher is beach, very high is rock
+//   m  dryness: dry ground at a middling height becomes desert sand
+//   t  growth: where it is high there are trees on grass and cacti on sand,
+//      and where it is low there are flowers
 function genSurface(level, seed) {
   for (let y = 0; y < MAP; y++) {
     for (let x = 0; x < MAP; x++) {
@@ -55,6 +72,7 @@ function genSurface(level, seed) {
       if (id === Tile.sand && t > 0.7) set(level, x, y, Tile.cactus);
     }
   }
+  // Ring the whole map with water, so the world is an island.
   for (let i = 0; i < MAP; i++) {
     set(level, i, 0, Tile.water);
     set(level, i, MAP - 1, Tile.water);
@@ -63,11 +81,16 @@ function genSurface(level, seed) {
   }
 }
 
+// A cave level. `ore` says which ore it holds, and that also decides the
+// liquid: the iron caves are dry, the gold caves have water and the gem caves
+// have lava.
 function genCave(level, seed, ore) {
   const oreTile = ore === "iron" ? Tile.ironOre : ore === "gold" ? Tile.goldOre : Tile.gemOre;
   const liquid = ore === "gold" ? Tile.water : ore === "gem" ? Tile.lava : Tile.stoneFloor;
   for (let y = 0; y < MAP; y++) {
     for (let x = 0; x < MAP; x++) {
+      // n decides where the rock walls are, o where ore sits inside the rock
+      // and l where the pools are.
       const n = fbm(x, y, seed, 14, 4);
       const o = fbm(x, y, seed + 5, 8, 3);
       const l = fbm(x, y, seed + 8, 22, 3);
@@ -77,6 +100,7 @@ function genCave(level, seed, ore) {
       if (get(level, x, y) === Tile.rock && o > 0.78) set(level, x, y, oreTile);
     }
   }
+  // Wall the level in with rock.
   for (let i = 0; i < MAP; i++) {
     set(level, i, 0, Tile.rock);
     set(level, i, MAP - 1, Tile.rock);
@@ -85,6 +109,8 @@ function genCave(level, seed, ore) {
   }
 }
 
+// The sky: clouds to walk on with open air between them, and the odd cloud
+// cactus.
 function genSky(level, seed) {
   for (let y = 0; y < MAP; y++) {
     for (let x = 0; x < MAP; x++) {
@@ -97,9 +123,14 @@ function genSky(level, seed) {
   }
 }
 
+// Join the levels up. Stairs down on one level and the stairs up on the level
+// below are always on the same tile, so you arrive where you left.
 function placeStairs(levels, rng, seed) {
   const surface = levels[LEVEL.SURFACE];
   const downs = [];
+  // 28 staircases down from the surface, each somewhere inside rock, so you
+  // have to dig to reach one. A try that lands outside rock is taken again,
+  // which is what `i--` does.
   for (let i = 0; i < 28; i++) {
     const x = rng.range(6, MAP - 7);
     const y = rng.range(6, MAP - 7);
@@ -111,6 +142,9 @@ function placeStairs(levels, rng, seed) {
     downs.push([x, y]);
   }
 
+  // Work down through the caves. Each level gets stairs up underneath every
+  // staircase from the level above, with the rock around them cleared, and then
+  // up to 18 staircases down of its own.
   let cur = downs;
   const chain = [LEVEL.CAVE1, LEVEL.CAVE2, LEVEL.CAVE3];
   for (let li = 0; li < chain.length; li++) {
@@ -131,6 +165,8 @@ function placeStairs(levels, rng, seed) {
     cur = next.length ? next : cur;
   }
 
+  // Three staircases up to the sky, each walled in with hard rock that only a
+  // gem pickaxe can break.
   const skyStairs = [];
   for (let i = 0; i < 3; i++) {
     let x = rng.range(10, MAP - 11);
@@ -144,6 +180,7 @@ function placeStairs(levels, rng, seed) {
     set(surface, x, y, Tile.stairsUp);
     skyStairs.push([x, y]);
   }
+  // Where each one comes out in the sky, make sure there is cloud to stand on.
   const sky = levels[LEVEL.SKY];
   for (const [x, y] of skyStairs) {
     set(sky, x, y, Tile.stairsDown);
@@ -155,6 +192,8 @@ function placeStairs(levels, rng, seed) {
   }
 }
 
+// Open up the eight tiles around a staircase so you do not arrive sealed in
+// rock.
 function clearAround(level, x, y, floor) {
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
@@ -165,6 +204,9 @@ function clearAround(level, x, y, floor) {
   }
 }
 
+// Where the player starts: the first grass tile found near the middle of the
+// surface or, failing that, any grass at all. The answer is in pixels, at the
+// centre of the tile.
 export function findSpawn(level) {
   for (let y = (MAP / 2 - 20) | 0; y < MAP / 2 + 40; y++) {
     for (let x = (MAP / 2 - 20) | 0; x < MAP / 2 + 40; x++) {

@@ -1,3 +1,8 @@
+// The screens that sit on top of the world: title, pause, the pack, crafting,
+// chests, key settings and the end screens. `mode` says which one is showing,
+// and "play" means none of them. Each screen has a tick...() method that reacts
+// to keys and a draw...() method that draws it.
+
 import { VIEW_W, VIEW_H } from "../constants.js";
 import { C } from "./palette.js";
 import { drawText, drawTextShadow, drawFrame, textWidth, wrapText } from "./font.js";
@@ -8,13 +13,18 @@ import { recipesFor } from "../crafting/recipes.js";
 
 const PAUSE_ITEMS = ["Resume", "Save", "Controls", "Title"];
 
+// Friendlier names for keys on the Controls screen: "KeyW" becomes "W" and
+// "ArrowUp" becomes "UP".
 const KEY_NAMES = { Escape: "ESC", ArrowUp: "UP", ArrowDown: "DOWN", ArrowLeft: "LEFT", ArrowRight: "RIGHT" };
+// The name to show for a key code.
 function keyName(code) {
   if (!code) return "";
   if (KEY_NAMES[code]) return KEY_NAMES[code];
   return code.replace(/^Key|^Digit/, "").toUpperCase();
 }
 
+// Turn a number of ticks into text such as "3m 07s", or "1h 05m" once past an
+// hour.
 function playTime(ticks) {
   const s = (ticks / 60) | 0;
   const h = (s / 3600) | 0;
@@ -23,31 +33,45 @@ function playTime(ticks) {
   return h ? `${h}h ${pad(m)}m` : `${m}m ${pad(s % 60)}s`;
 }
 
+// There is one UI, owned by the Game.
 export class UI {
+  // The game opens on the title screen.
   constructor() {
     this.mode = "title";
+    // Which line of the current menu the cursor is on.
     this.sel = 0;
+    // The seed for the next new world. It starts out random, and the Seed
+    // option lets the player type one in.
     this.seedText = String((Math.random() * 1e9) | 0);
+    // The hint message at the top of the screen, and how many ticks it has
+    // left.
     this.msg = "";
     this.msgTime = 0;
+    // The furniture whose screen is open, and the recipes it offers.
     this.station = null;
     this.recipes = [];
+    // In the chest screen: which side is active (0 is the chest, 1 is the pack)
+    // and where the cursor is on each side.
     this.chestWindow = 0;
     this.chestSel = [0, 0];
+    // Which screen to go back to from Controls.
     this.bindsFrom = "title";
     this.endDelay = 0;
   }
 
+  // Show a message at the top of the screen for four seconds.
   toast(text) {
     this.msg = text;
     this.msgTime = 240;
   }
 
+  // The title menu. "Continue" only appears when there is a saved game.
   titleItems(game) {
     const items = ["New world", "Build mode", "Seed", "Controls"];
     return game.hasSave() ? ["Continue", ...items] : items;
   }
 
+  // Open the pack.
   openInventory(player) {
     // Whatever was in hand goes back to the top of the pack while you choose.
     player.inv.putFront(player.held);
@@ -56,6 +80,7 @@ export class UI {
     this.sel = 0;
   }
 
+  // Show the death or win screen. `mode` is "dead" or "won".
   showEnd(mode) {
     this.mode = mode;
     this.sel = 0;
@@ -63,6 +88,8 @@ export class UI {
     this.endDelay = 60;
   }
 
+  // Open the screen for a piece of furniture: the chest view for a chest, and
+  // the crafting list for anything else.
   openStation(furn, player) {
     this.station = furn;
     this.sel = 0;
@@ -93,6 +120,8 @@ export class UI {
     else if (this.mode === "dead" || this.mode === "won") this.tickEnd(game, in_);
   }
 
+  // Up and down move the cursor (the `%` makes it wrap round at the ends), and
+  // attack or menu chooses.
   tickTitle(game, in_) {
     const items = this.titleItems(game);
     if (in_.just("up")) this.sel = (this.sel + items.length - 1) % items.length;
@@ -116,6 +145,7 @@ export class UI {
     }
   }
 
+  // The pause menu.
   tickPause(game, in_) {
     const items = PAUSE_ITEMS;
     if (in_.just("up")) this.sel = (this.sel + items.length - 1) % items.length;
@@ -144,6 +174,7 @@ export class UI {
     }
   }
 
+  // The pack: choose an item to hold, or drop one with the drop key.
   tickInv(game, in_) {
     const p = game.player;
     if (in_.just("menu") || in_.just("pause")) {
@@ -168,6 +199,7 @@ export class UI {
     }
   }
 
+  // Crafting: attack makes the chosen recipe, if you can afford it.
   tickCraft(game, in_) {
     const list = this.recipes;
     if (!list.length || in_.just("menu") || in_.just("pause")) {
@@ -185,6 +217,8 @@ export class UI {
     }
   }
 
+  // A chest: left and right switch between the chest and your pack, and attack
+  // moves the chosen stack across to the other side.
   tickChest(game, in_) {
     if (in_.just("menu") || in_.just("pause")) {
       this.mode = "play";
@@ -208,6 +242,7 @@ export class UI {
     }
   }
 
+  // Controls: attack on an action, then press the key you want for it.
   tickBinds(game, in_) {
     if (game.input.waiting) return;
     const actions = Object.keys(game.input.binds);
@@ -220,6 +255,7 @@ export class UI {
     if (in_.just("attack")) game.input.startRebind(actions[this.sel], 0);
   }
 
+  // The death and win screens: attack or menu goes back to the title.
   tickEnd(game, in_) {
     if (this.endDelay > 0) {
       this.endDelay--;
@@ -231,6 +267,7 @@ export class UI {
     }
   }
 
+  // Draw whichever screen is showing, then the hint message on top.
   draw(game, r) {
     const ctx = r.buffer().getContext("2d");
     if (this.mode === "title") this.drawTitle(ctx, game);
@@ -263,6 +300,7 @@ export class UI {
     }
   }
 
+  // Darken the world behind a menu.
   dim(ctx) {
     ctx.fillStyle = "rgba(0,0,0,0.6)";
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
@@ -277,6 +315,8 @@ export class UI {
     });
   }
 
+  // The title screen. The logo is drawn three times, slightly offset, which
+  // gives it a shadow.
   drawTitle(ctx, game) {
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
@@ -289,6 +329,7 @@ export class UI {
     drawText(ctx, "(Arrow keys,X and C)", 0, 110, C(111));
   }
 
+  // The pause menu, over a darkened world.
   drawPause(ctx) {
     this.dim(ctx);
     drawFrame(ctx, "paused", 3, 3, 16, 10);
@@ -298,6 +339,8 @@ export class UI {
   // Scrolling list of inventory rows inside a frame.
   drawItemList(ctx, slots, x0, y0, x1, y1, sel, focused) {
     const rows = y1 - y0 - 1;
+    // Scroll so the chosen row stays near the middle. `rows >> 1` is half of
+    // rows, rounded down.
     const top = Math.max(0, Math.min(sel - (rows >> 1), slots.length - rows));
     for (let i = 0; i < rows && top + i < slots.length; i++) {
       drawItem(ctx, slots[top + i], (x0 + 1) * 8, (y0 + 1 + i) * 8);
@@ -309,11 +352,15 @@ export class UI {
     }
   }
 
+  // The pack.
   drawInv(ctx, game) {
     drawFrame(ctx, "inventory", 1, 1, 12, 11);
     this.drawItemList(ctx, game.player.inv.slots, 1, 1, 12, 11, this.sel, true);
   }
 
+  // Crafting has three boxes: the recipes on the left (dimmed if you cannot
+  // afford them), how many of the chosen item you already have, and what it
+  // costs.
   drawCraft(ctx, game) {
     const inv = game.player.inv;
     drawFrame(ctx, "have", 12, 1, 19, 3);
@@ -356,6 +403,7 @@ export class UI {
     ctx.restore();
   }
 
+  // The Controls screen: each action and its keys.
   drawBinds(ctx, game) {
     this.dim(ctx);
     drawFrame(ctx, "controls", 0, 0, 19, 12);
@@ -369,6 +417,7 @@ export class UI {
     drawText(ctx, game.input.waiting ? "Press a key..." : "Attack: change", 16, 11 * 8, C(444));
   }
 
+  // The box shown on dying or winning, with play time and score.
   drawEnd(ctx, game, line, hint) {
     drawFrame(ctx, "", 1, 3, 18, 9);
     drawText(ctx, line, 16, 32, C(555));

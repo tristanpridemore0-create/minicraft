@@ -8,8 +8,10 @@ const DEAD_ZONE = 0.28;
 // In open play the pad is 8-way: an axis is on when it carries at least this
 // share of the push. In menus it is 4-way, so a sloppy "up" is never also "left".
 const AXIS_SHARE = 0.38;
+// The four direction actions, as input.js names them.
 const DIRECTIONS = ["up", "down", "left", "right"];
 
+// Make a page element with a class name and, if given, some text.
 function el(tag, className, text) {
   const node = document.createElement(tag);
   node.className = className;
@@ -17,6 +19,7 @@ function el(tag, className, text) {
   return node;
 }
 
+// Decide whether to show the on-screen controls at all.
 export function initTouch(game) {
   const forced = new URLSearchParams(location.search).get("touch");
   if (forced === "0") return;
@@ -87,6 +90,7 @@ function guardZoom(root) {
   window.visualViewport.addEventListener("scroll", sync);
 }
 
+// Create the controls and wire them up.
 function build(game) {
   const input = game.input;
   const root = el("div", "touch");
@@ -168,6 +172,8 @@ function build(game) {
   // --- thumb pad ---
   let padPointer = null;
 
+  // Turn the thumb's position on the pad (dx and dy, each from -1 to 1) into
+  // the directions being asked for.
   const steer = (dx, dy) => {
     const mag = Math.hypot(dx, dy);
     const want = { up: false, down: false, left: false, right: false };
@@ -186,6 +192,8 @@ function build(game) {
     apply();
   };
 
+  // Follow a finger on the pad: move the knob under it and steer. A finger that
+  // slides off the pad counts as being at its rim.
   const track = (e) => {
     const box = pad.getBoundingClientRect();
     const r = box.width / 2;
@@ -200,6 +208,7 @@ function build(game) {
     steer(dx, dy);
   };
 
+  // The finger has lifted: centre the knob and stop.
   const letGo = (e) => {
     if (e.pointerId !== padPointer) return;
     padPointer = null;
@@ -224,6 +233,7 @@ function build(game) {
   pad.addEventListener("pointercancel", letGo);
 
   // --- buttons ---
+  // Make a button press and release an action.
   const bind = (node, action) => {
     const release = () => {
       node.classList.remove("held");

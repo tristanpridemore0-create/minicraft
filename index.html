@@ -2,6 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- Tells phones to show the page at its real size and not to let pinching or
+         double-tapping zoom it. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Minicraft</title>
     <!-- Lets a phone add the game to its home screen and open it full screen, with no browser bars. -->
@@ -12,14 +14,19 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Minicraft" />
     <link rel="apple-touch-icon" href="icons/icon-180.png" />
+    <!-- How the page looks: styles.css. -->
     <link rel="stylesheet" href="styles.css" />
+    <!-- The little icon on the browser tab, written out here as a tiny drawing. -->
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect fill='%237fc238' width='16' height='16'/%3E%3Crect fill='%233a7a18' x='4' y='2' width='8' height='8'/%3E%3C/svg%3E" />
   </head>
   <body>
     <div id="wrap">
+      <!-- The game is drawn on this canvas. The hint below it is hidden when the
+           touch controls are showing. -->
       <canvas id="game" width="640" height="480" aria-label="Minicraft game"></canvas>
       <p id="hint">Arrows / WASD move · C / Space attack or use held item · X / E pack or open furniture · Escape pause</p>
     </div>
+    <!-- Starts the game. "module" lets src/main.js load the other files it needs. -->
     <script type="module" src="src/main.js"></script>
   </body>
 </html>

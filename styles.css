@@ -1,7 +1,10 @@
+/* Make every element's width and height include its padding and border, which
+   keeps sizes easy to reason about. */
 * {
   box-sizing: border-box;
 }
 
+/* The page itself: dark, and filling the whole window. */
 html,
 body {
   margin: 0;
@@ -11,6 +14,7 @@ body {
   font-family: Tahoma, Geneva, Verdana, sans-serif;
 }
 
+/* Centres the game on the page, with the key hints underneath. */
 #wrap {
   min-height: 100%;
   display: flex;
@@ -21,6 +25,8 @@ body {
   padding: 16px;
 }
 
+/* The game's canvas. It is drawn small and stretched, so `image-rendering`
+   tells the browser to keep the pixels sharp instead of blurring them. */
 #game {
   width: min(100vw - 24px, 960px);
   height: auto;
@@ -30,6 +36,7 @@ body {
   box-shadow: 0 0 0 4px #222, 0 12px 40px rgba(0, 0, 0, 0.65);
 }
 
+/* The line of key hints under the game. */
 #hint {
   margin: 0;
   font-size: 12px;

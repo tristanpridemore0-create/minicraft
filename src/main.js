@@ -1,7 +1,11 @@
+// Where the game starts. index.html loads this file, and this file builds the
+// Game and sets it running.
+
 import { SCREEN_W, SCREEN_H } from "./constants.js";
 import { Game } from "./game.js";
 import { initTouch } from "./touch.js";
 
+// The <canvas> in index.html is the rectangle everything is drawn on.
 const canvas = document.getElementById("game");
 canvas.width = SCREEN_W;
 canvas.height = SCREEN_H;

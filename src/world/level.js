@@ -1,52 +1,71 @@
+// One level of the world (the surface, a cave or the sky): its tiles,
+// everything standing or lying on it, and the rules for what happens when a
+// tile is hit, dug, planted or left to grow.
+
 import { MAP, TILE, TOOL, TIER } from "../constants.js";
 import { Tile, solid, liquid, holeLike, walkable } from "./tiles.js";
 import { TextParticle, SmashParticle } from "../entities/particles.js";
 import { ItemEntity } from "../entities/itemEntity.js";
 import { C } from "../render/palette.js";
 
+// A random whole number from 0 to n - 1.
 const rnd = (n) => (Math.random() * n) | 0;
 
+// The four tiles next to a tile: left, right, up and down.
 const NEIGHBOURS = [
   [-1, 0],
   [1, 0],
   [0, -1],
   [0, 1],
 ];
+// Which item each ore tile gives.
 const ORE_ITEM = { [Tile.ironOre]: "ironOre", [Tile.goldOre]: "goldOre", [Tile.gemOre]: "gem" };
 const isWheat = (id) => id >= Tile.wheat0 && id <= Tile.wheat3;
 
+// One level. `id` is its number: 1 for the sky, 0 for the surface and -1 to -3
+// for the caves.
 export class Level {
+  // `data` comes from the world generator: the tiles and the size of the map.
   constructor(id, data) {
     this.id = id;
     this.w = data.w;
     this.h = data.h;
+    // One number per tile, row after row. tiles.js says what the numbers mean.
     this.tiles = data.tiles;
     // Per-tile extras: `data` is an age (crops, saplings, farmland) or a
     // footprint timer (sand); `hurt` is damage taken so far.
     this.data = new Uint8Array(MAP * MAP);
     this.hurt = new Int16Array(MAP * MAP);
+    // Everything on this level that is not a tile: monsters, furniture, dropped
+    // items and particles. The player is kept separately, in game.player.
     this.entities = [];
     // Build mode: everything breaks on the first hit.
     this.instant = false;
   }
 
+  // Where tile (x, y) sits in the long lists above.
   idx(x, y) {
     return x + y * this.w;
   }
 
+  // Is (x, y) on the map?
   inside(x, y) {
     return x >= 0 && y >= 0 && x < this.w && y < this.h;
   }
 
+  // The tile at (x, y). Anything off the map counts as rock, so nothing can
+  // walk off the edge.
   get(x, y) {
     if (!this.inside(x, y)) return Tile.rock;
     return this.tiles[this.idx(x, y)];
   }
 
+  // The extra number stored for a tile (see `data` above).
   getData(x, y) {
     return this.inside(x, y) ? this.data[this.idx(x, y)] : 0;
   }
 
+  // Change a tile. Its extra number and any damage start again from zero.
   set(x, y, id, data = 0) {
     if (!this.inside(x, y)) return;
     const i = this.idx(x, y);
@@ -60,6 +79,9 @@ export class Level {
     return this.id < 0 ? Tile.stoneFloor : Tile.dirt;
   }
 
+  // Would something centred on the pixel (px, py), reaching xr pixels to each
+  // side and yr up and down, overlap a tile it cannot walk on? Every tile the
+  // box touches is checked.
   blocked(px, py, xr = 5, yr = 5, canSwim = true) {
     const x0 = Math.floor((px - xr) / TILE);
     const y0 = Math.floor((py - yr) / TILE);
@@ -73,19 +95,24 @@ export class Level {
     return false;
   }
 
+  // The tile under a pixel position.
   tileAtPixel(px, py) {
     return this.get(Math.floor(px / TILE), Math.floor(py / TILE));
   }
 
+  // Put something on this level.
   add(e) {
     e.level = this;
     this.entities.push(e);
   }
 
+  // Clear out everything that was marked as removed during this tick.
   removeDead() {
     this.entities = this.entities.filter((e) => !e.removed);
   }
 
+  // Everything whose box overlaps the rectangle from (x0, y0) to (x1, y1),
+  // leaving out `except` if one is given.
   entitiesIn(x0, y0, x1, y1, except = null) {
     return this.entities.filter((e) => !e.removed && e !== except && e.x + e.xr > x0 && e.x - e.xr < x1 && e.y + e.yr > y0 && e.y - e.yr < y1);
   }
@@ -97,6 +124,7 @@ export class Level {
     }
   }
 
+  // The burst and the floating number shown when a tile is hit.
   hitFx(tx, ty, dmg) {
     this.add(new SmashParticle(tx * TILE + 8, ty * TILE + 8));
     this.add(new TextParticle(dmg, tx * TILE + 8, ty * TILE + 8, C(500)));
@@ -110,6 +138,8 @@ export class Level {
     return this.instant || this.hurt[i] >= need;
   }
 
+  // A tree takes 20 damage to fell. Each hit has a 1 in 10 chance of shaking an
+  // apple loose. Felling it gives 1-2 wood and up to 3 acorns.
   hitTree(tx, ty, dmg) {
     if (rnd(10) === 0) this.drop(tx, ty, "apple");
     if (!this.damage(tx, ty, dmg, 20)) return;
@@ -118,6 +148,8 @@ export class Level {
     this.set(tx, ty, Tile.grass);
   }
 
+  // Rock gives 1-4 stone and sometimes a piece of coal. `need` is 50 for
+  // ordinary rock and 200 for hard rock.
   hitRock(tx, ty, dmg, need) {
     if (!this.damage(tx, ty, dmg, need)) return;
     this.drop(tx, ty, "stone", rnd(4) + 1);
@@ -142,6 +174,8 @@ export class Level {
     this.drop(tx, ty, ORE_ITEM[id], count);
   }
 
+  // Pull up wheat. Only ripe wheat (age 40 and over) gives any, and fully grown
+  // wheat (age 50) gives the most. A seed may come back either way.
   harvest(tx, ty) {
     const age = this.getData(tx, ty);
     this.drop(tx, ty, "seeds", rnd(2));
@@ -157,9 +191,14 @@ export class Level {
     const id = this.get(tx, ty);
     const tool = item.tool;
     const lvl = item.tier;
+    // A wooden tool costs 4 stamina a swing and a gem tool costs nothing extra.
     const cost = 4 - lvl;
+    // The damage of a swing with the right tool: 10-19, plus 5 for each tier.
     const swing = () => rnd(10) + lvl * 5 + 10;
 
+    // Shovel: digs up the ground. In each check below payStamina comes last on
+    // purpose, so stamina is only spent when the tile is one this tool works
+    // on.
     if (tool === TOOL.SHOVEL) {
       if (id === Tile.grass && player.payStamina(cost)) {
         this.set(tx, ty, Tile.dirt);
@@ -191,6 +230,8 @@ export class Level {
       }
     }
 
+    // Hoe: turns ground into farmland. On grass, one swing in five turns up
+    // seeds instead.
     if (tool === TOOL.HOE) {
       if (id === Tile.grass && player.payStamina(cost)) {
         if (rnd(5) === 0) this.drop(tx, ty, "seeds");
@@ -203,11 +244,13 @@ export class Level {
       }
     }
 
+    // Axe: fells trees.
     if (tool === TOOL.AXE && id === Tile.tree && player.payStamina(cost)) {
       this.hitTree(tx, ty, swing());
       return true;
     }
 
+    // Pickaxe: breaks rock and mines ore. Hard rock needs a gem pickaxe.
     if (tool === TOOL.PICK) {
       if (id === Tile.rock && player.payStamina(cost)) {
         this.hitRock(tx, ty, swing(), 50);
@@ -271,6 +314,8 @@ export class Level {
     if (!this.inside(tx, ty)) return;
     const id = this.get(tx, ty);
     const i = this.idx(tx, ty);
+    // Walking on sand leaves footprints, which fade in tickTiles below.
+    // Farmland and crops can be trampled, but only by one step in 60.
     if (id === Tile.sand) this.data[i] = 10;
     else if (id === Tile.farm) {
       if (rnd(60) === 0 && this.data[i] >= 5) this.set(tx, ty, Tile.dirt);
@@ -290,28 +335,37 @@ export class Level {
       const i = this.idx(x, y);
       const id = this.tiles[i];
       if (id === Tile.grass) {
+        // Grass creeps onto a neighbouring dirt tile, one turn in 40.
         if (rnd(40) !== 0) continue;
         const [dx, dy] = NEIGHBOURS[rnd(4)];
         if (this.get(x + dx, y + dy) === Tile.dirt) this.set(x + dx, y + dy, Tile.grass);
       } else if (id === Tile.water || id === Tile.lava) {
+        // Water and lava run into a hole beside them.
         const [dx, dy] = NEIGHBOURS[rnd(4)];
         if (this.get(x + dx, y + dy) === Tile.hole) this.set(x + dx, y + dy, id);
       } else if (id === Tile.farm) {
+        // Farmland ages up to 5. Only then can it be trampled back to dirt.
         if (this.data[i] < 5) this.data[i]++;
       } else if (isWheat(id)) {
+        // Wheat grows from age 0 to 50, and every 10 it moves on to the next of
+        // its four pictures.
         if (rnd(2) === 0 && this.data[i] < 50) {
           this.data[i]++;
           this.tiles[i] = Tile.wheat0 + Math.min(3, (this.data[i] / 10) | 0);
         }
       } else if (id === Tile.sapling || id === Tile.cactusSapling) {
+        // A sapling becomes a tree or a cactus after about 100 turns.
         if (++this.data[i] > 100) this.set(x, y, id === Tile.sapling ? Tile.tree : Tile.cactus);
       } else if (id === Tile.sand) {
+        // Footprints fade.
         if (this.data[i] > 0) this.data[i]--;
       } else if (id === Tile.tree || id === Tile.rock || id === Tile.hardRock || id === Tile.cactus) {
+        // Half-broken things slowly mend if you stop hitting them.
         if (this.hurt[i] > 0) this.hurt[i]--;
       }
     }
   }
 }
 
+// Passed along from tiles.js for convenience.
 export { solid, liquid, holeLike };

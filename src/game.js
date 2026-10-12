@@ -1,3 +1,6 @@
+// The game itself. It owns the world, the player and the screens, and runs the
+// loop that moves everything forward 60 times a second.
+
 import { LEVEL, MAP, TILE } from "./constants.js";
 import { Input } from "./input.js";
 import { AudioBus } from "./audio.js";
@@ -14,6 +17,7 @@ import { Inventory } from "./items/inventory.js";
 import { checkProgress } from "./progression/progress.js";
 import { Tile, walkable } from "./world/tiles.js";
 
+// A random whole number from 0 to n - 1.
 const rnd = (n) => (Math.random() * n) | 0;
 
 // What you carry in build mode. None of it runs out.
@@ -38,47 +42,60 @@ const BUILD_KIT = [
   "lantern",
 ];
 
+// There is one Game, made in main.js.
 export class Game {
+  // Set everything up. No world exists until newGame() or load() is called.
   constructor(canvas) {
     this.canvas = canvas;
+    // The helpers: input, sound, drawing and menus.
     this.input = new Input();
     this.audio = new AudioBus();
     this.renderer = new Renderer(canvas);
     this.ui = new UI();
     this.player = null;
+    // The five levels by number (see LEVEL in constants.js), and a copy of
+    // their tiles as first generated, which saving needs.
     this.levels = {};
     this.original = {};
     // Play time in ticks; it stops when you die or win.
     this.tick = 0;
     this.seed = 1;
+    // deadTime and wonTimer hold back the end screens for a moment after dying
+    // or winning.
     this.dead = false;
     this.deadTime = 0;
     this.won = false;
     this.wonTimer = 0;
     this.wizardDead = false;
+    // Which hints have been shown (see progression/progress.js).
     this.flags = {};
     // Build mode: a world with no monsters, no damage and a full kit.
     this.build = false;
     // The world last written to, or read from, the save slot.
     this.savedWorld = null;
+    // Used by loop() below to keep the game at the same speed on any screen.
     this.acc = 0;
     this.last = performance.now();
     canvas.addEventListener("pointerdown", () => this.audio.unlock());
     window.addEventListener("keydown", () => this.audio.unlock());
   }
 
+  // Is there a saved game to continue?
   hasSave() {
     return hasSave();
   }
 
+  // Start a fresh world from a seed number.
   newGame(seed, build = false) {
     this.build = build;
+    // Force the seed to a whole number, and never 0.
     this.seed = seed >>> 0 || 1;
     const raw = generateWorld(this.seed);
     this.levels = {};
     for (const [id, data] of Object.entries(raw)) {
       this.levels[id] = new Level(Number(id), data);
     }
+    // Remember the untouched world, so a save only has to list what changed.
     this.original = snapshotTiles(this.levels);
     const spawn = findSpawn(this.levels[LEVEL.SURFACE]);
     this.player = new Player(spawn.x, spawn.y);
@@ -105,6 +122,8 @@ export class Game {
     for (const lv of Object.values(this.levels)) this.trySpawn(lv, 5000);
   }
 
+  // Continue the saved game: rebuild the world from its seed, then put
+  // everything the save recorded back on top.
   load() {
     const data = readSave();
     if (!data) return;
@@ -176,6 +195,7 @@ export class Game {
     this.ui.toast("Loaded");
   }
 
+  // Write the game to the browser's storage.
   save() {
     if (!this.player) return;
     writeSave(this);
@@ -195,6 +215,8 @@ export class Game {
     if (this.savedWorld === this.worldId() || !hasSave() || this.tick >= 7200) this.save();
   }
 
+  // Put the Air Wizard on a random cloud in the sky. After 80 failed tries he
+  // goes in the middle of the map.
   spawnWizard() {
     const sky = this.levels[LEVEL.SKY];
     for (let i = 0; i < 80; i++) {
@@ -213,8 +235,12 @@ export class Game {
   // the player, crowded, or not somewhere a monster can stand.
   trySpawn(level, count) {
     const depth = level.id;
+    // The range of monster levels for this level of the world: 1 on the
+    // surface, up to 4 in the deepest cave, and always 4 in the sky.
     const min = depth > 0 ? 4 : 1;
     const max = depth > 0 ? 4 : depth < 0 ? 1 - depth : 1;
+    // How much empty space a new monster needs around it. It is more on the
+    // surface, which keeps things quieter up there.
     const room = (depth === 0 ? 8 : 4) * TILE;
     const p = this.player;
     for (let i = 0; i < count; i++) {
@@ -243,20 +269,26 @@ export class Game {
     this.ui.toast(names[next.id] || "Level");
   }
 
+  // The menu key: open the furniture in front of the player, or the pack if
+  // there is none.
   tryUseOrMenu() {
     if (this.ui.mode !== "play") return;
     if (this.player.use(this)) return;
     this.ui.openInventory(this.player);
   }
 
+  // Open the screen for a workbench, chest or other furniture.
   openStation(furn) {
     this.ui.openStation(furn, this.player);
   }
 
+  // Drop an item at the player's feet.
   dropAtPlayer(id, n) {
     this.player.level.add(new ItemEntity(this.player.x, this.player.y, id, n));
   }
 
+  // Called when the Air Wizard dies. The win screen follows three seconds
+  // later, and the player cannot be hurt in the meantime.
   wizardDefeated() {
     this.wizardDead = true;
     this.won = true;
@@ -265,6 +297,7 @@ export class Game {
     this.audio.win();
   }
 
+  // One tick of the game: read input, move everything, then draw.
   step() {
     const modeAtStart = this.ui.mode;
     if (this.ui.mode === "play" && !this.dead && this.input.just("pause")) {
@@ -272,6 +305,7 @@ export class Game {
       this.ui.sel = 0;
     }
 
+    // The world only moves while playing. Any menu pauses it.
     if (this.ui.mode === "play" && this.player) {
       const running = !this.dead && !this.won;
       if (running) this.tick++;
@@ -285,6 +319,7 @@ export class Game {
       if (!this.build) this.trySpawn(level, 1);
       if (running) {
         checkProgress(this);
+        // Autosave every two minutes of play, which is 7200 ticks.
         if (this.tick % 7200 === 0) this.save();
       }
       // The world carries on for a moment before the end screen appears.
@@ -304,7 +339,13 @@ export class Game {
     this.input.endFrame();
   }
 
+  // Called by the browser each time the screen is about to be redrawn. Screens
+  // redraw at different rates (60, 120, 144 times a second and so on), so this
+  // adds up the real time that has passed and runs one step() for every 1/60 of
+  // a second of it. That keeps the game at the same speed everywhere.
   loop = (now) => {
+    // Never count more than 50 milliseconds at once, so the game does not race
+    // to catch up after the tab has been in the background.
     const dt = Math.min(50, now - this.last);
     this.last = now;
     this.acc += dt;
@@ -315,6 +356,7 @@ export class Game {
     requestAnimationFrame(this.loop);
   };
 
+  // Begin the loop.
   start() {
     requestAnimationFrame(this.loop);
   }

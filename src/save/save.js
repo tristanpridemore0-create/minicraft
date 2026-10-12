@@ -1,5 +1,9 @@
+// Saving and loading. The saved game is one piece of text (JSON) kept in the
+// browser's localStorage, so it stays on this device and in this browser.
+
 import { SAVE_KEY, MAP, LEVEL } from "../constants.js";
 
+// Is there a saved game?
 export function hasSave() {
   return !!localStorage.getItem(SAVE_KEY);
 }
@@ -12,6 +16,8 @@ export function writeSave(game) {
   const tileData = {};
   const furniture = {};
   const items = {};
+  // For each level: the tiles that differ from the freshly generated world, the
+  // extra number of any tile that has one, and the furniture and dropped items.
   for (const [id, level] of Object.entries(game.levels)) {
     const diffs = [];
     const cells = [];
@@ -31,6 +37,8 @@ export function writeSave(game) {
   const wiz = game.levels[LEVEL.SKY].entities.find((e) => e.type === "wizard" && !e.removed);
   // Build mode has no wizard, so there is nothing to record for him.
   const p = game.player;
+  // Everything that goes into the save. `version` lets a newer game recognise
+  // an older save and convert it (see Game.load).
   const data = {
     version: 2,
     build: game.build,
@@ -59,6 +67,7 @@ export function writeSave(game) {
   localStorage.setItem(SAVE_KEY, JSON.stringify(data));
 }
 
+// Read the save back, or null if there is none or it is damaged.
 export function readSave() {
   try {
     return JSON.parse(localStorage.getItem(SAVE_KEY));
@@ -67,12 +76,15 @@ export function readSave() {
   }
 }
 
+// Copy every level's tiles as they were generated, so writeSave can later tell
+// what the player changed.
 export function snapshotTiles(levels) {
   const out = {};
   for (const [id, level] of Object.entries(levels)) out[id] = new Uint8Array(level.tiles);
   return out;
 }
 
+// Put saved tile changes back on top of a freshly generated world.
 export function applyMutations(levels, mutations) {
   if (!mutations) return;
   for (const [id, diffs] of Object.entries(mutations)) {

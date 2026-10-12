@@ -1,6 +1,10 @@
+// What can be crafted, where, and for how much.
+
 import { TIER, TOOL } from "../constants.js";
 import { TOOL_ITEMS, toolCost } from "../items/defs.js";
 
+// Make the recipes for all five tools in each of the given materials, at one
+// kind of furniture.
 function toolRecipes(station, tiers) {
   const out = [];
   for (const tier of tiers) {
@@ -17,7 +21,11 @@ function toolRecipes(station, tiers) {
   return out;
 }
 
+// Every recipe. `station` is the furniture you must be standing at, `result` is
+// the id of the item you get and `cost` is what it takes from your pack.
 export const RECIPES = [
+  // Left over from an earlier version: nothing opens a "player" crafting list
+  // now.
   { station: "player", result: "workbench", count: 1, cost: { wood: 20 } },
 
   { station: "workbench", result: "workbench", count: 1, cost: { wood: 20 } },
@@ -37,6 +45,7 @@ export const RECIPES = [
   ...toolRecipes("anvil", [TIER.IRON, TIER.GOLD, TIER.GEM]),
 ];
 
+// The recipes on offer at one kind of furniture.
 export function recipesFor(station) {
   return RECIPES.filter((r) => r.station === station);
 }
