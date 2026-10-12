@@ -34,6 +34,10 @@ Gather resources, craft through wood → rock → iron → gold → gem tools, r
 
 On a phone or tablet, on-screen controls appear by themselves: a thumb pad to move, **C** and **X** buttons that do what those keys do, and a pause button in the corner. Add `?touch=1` to the address to see them on a computer, or `?touch=0` to turn them off.
 
+The **TILT** button turns on tilt to walk: lean the phone and you walk that way. However you are holding the phone when you switch it on counts as level. Menus still use the pad. An iPhone asks for permission to use motion the first time.
+
+To play full screen on a phone, with no address bar: on an iPhone, open the game in Safari, tap **Share**, then **Add to Home Screen**, and start it from the new icon. On Android, use the full-screen button next to pause, or **Add to Home screen** from the browser menu.
+
 You hold one item at a time. Press **X** to open your pack, pick something with up and down, and press **C** to take it in hand. Closing the pack without choosing leaves your hands empty.
 
 **C** then does whatever that item is for:
@@ -70,7 +74,7 @@ There is one save slot, shared between build mode and the normal game.
 
 ## Save
 
-Progress is stored in the browser (`localStorage`). The game autosaves about every two minutes. Pause → Save also works.
+Progress is stored in the browser (`localStorage`), so it stays on that device and browser. The game autosaves about every two minutes and whenever you leave the page or switch away from it. Pause → Save also works.
 
 The same numeric seed regenerates the same terrain; tile edits, crop growth, your pack and score, furniture, dropped items, and the Air Wizard's health are stored as a save overlay. Monsters are not saved; the world repopulates on load.
 

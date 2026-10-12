@@ -103,12 +103,43 @@ function build(game) {
   pack.append(el("span", "touch-label", "pack"));
   buttons.append(pack, use);
 
-  const pause = el("button", "touch-pause", "II");
+  // Small buttons along the top right: pause, then whatever extras this
+  // device can do.
+  const top = el("div", "touch-top");
+  const pause = el("button", "touch-small touch-pause", "II");
   pause.setAttribute("aria-label", "Pause");
+  top.append(pause);
 
   const note = el("div", "touch-zoom-note", "Zoomed in. Pinch out to fix.");
 
-  root.append(pad, buttons, pause, note);
+  // A line of text that shows for a few seconds, for things the game itself
+  // has no way to say.
+  const msg = el("div", "touch-msg");
+  let msgTimer = 0;
+  const say = (text) => {
+    msg.textContent = text;
+    msg.classList.add("show");
+    clearTimeout(msgTimer);
+    msgTimer = setTimeout(() => msg.classList.remove("show"), 3500);
+  };
+
+  root.append(pad, buttons, top, note, msg);
+
+  // A full-screen button, where the browser can do it. iPhones cannot from
+  // inside Safari; there the way to lose the address bar is to add the game
+  // to the home screen. Opened from there it is already full screen, so the
+  // button is left out.
+  const installed = matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches || navigator.standalone;
+  const page = document.documentElement;
+  if (!installed && document.fullscreenEnabled && page.requestFullscreen) {
+    const full = el("button", "touch-small touch-full", "[ ]");
+    full.setAttribute("aria-label", "Full screen");
+    full.addEventListener("pointerup", () => {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else page.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
+    });
+    top.append(full);
+  }
   document.body.classList.add("touch-on");
   document.body.append(root);
 
@@ -122,6 +153,17 @@ function build(game) {
   root.addEventListener("contextmenu", (e) => e.preventDefault());
 
   guardZoom(root);
+
+  // The pad and tilting can both ask for a direction; either one is enough.
+  const none = { up: false, down: false, left: false, right: false };
+  let padWants = none;
+  let tiltWants = none;
+  const apply = () => {
+    for (const d of DIRECTIONS) {
+      if (padWants[d] || tiltWants[d]) input.touchPress(d);
+      else input.touchRelease(d);
+    }
+  };
 
   // --- thumb pad ---
   let padPointer = null;
@@ -140,10 +182,8 @@ function build(game) {
         want.down = dy / mag > AXIS_SHARE;
       }
     }
-    for (const d of DIRECTIONS) {
-      if (want[d]) input.touchPress(d);
-      else input.touchRelease(d);
-    }
+    padWants = want;
+    apply();
   };
 
   const track = (e) => {
@@ -201,4 +241,87 @@ function build(game) {
   bind(use, "attack");
   bind(pack, "menu");
   bind(pause, "pause");
+
+  // --- tilt to walk ---
+  // Optional and off until the TILT button is tapped. Lean the phone and the
+  // player walks that way. Menus stay on the pad.
+  if (!window.DeviceOrientationEvent) return;
+  const tilt = el("button", "touch-small touch-tilt", "TILT");
+  tilt.setAttribute("aria-label", "Tilt to walk");
+  top.append(tilt);
+
+  let tilting = false;
+  // The lean that counts as standing still: however the phone was being
+  // held at the moment tilt was switched on.
+  let level = null;
+
+  const setTilt = (state) => {
+    tilting = state;
+    level = null;
+    tiltWants = none;
+    apply();
+    tilt.classList.toggle("on", state);
+  };
+
+  window.addEventListener("deviceorientation", (e) => {
+    if (!tilting || e.beta === null || e.gamma === null) return;
+    const [x, y] = screenTilt(e.beta, e.gamma);
+    if (!level) level = [x, y];
+    let want = none;
+    if (game.ui.mode === "play") {
+      const dx = x - level[0];
+      const dy = y - level[1];
+      // A direction that is already on stays on until the lean drops well
+      // back, so a hand hovering at the edge does not make it flicker.
+      const past = (d, lean) => lean > (tiltWants[d] ? TILT_OFF : TILT_ON);
+      want = { left: past("left", -dx), right: past("right", dx), up: past("up", -dy), down: past("down", dy) };
+    }
+    tiltWants = want;
+    apply();
+  });
+
+  // Turning the phone round changes what "level" means, so measure it again.
+  window.addEventListener("orientationchange", () => {
+    level = null;
+  });
+
+  tilt.addEventListener("click", async () => {
+    if (tilting) {
+      setTilt(false);
+      return;
+    }
+    // iPhones ask the player before a page may read the motion sensors, and
+    // only in answer to a tap.
+    const ask = DeviceOrientationEvent.requestPermission;
+    if (typeof ask === "function") {
+      let answer = "denied";
+      try {
+        answer = await ask.call(DeviceOrientationEvent);
+      } catch {
+        // Treated the same as being told no.
+      }
+      if (answer !== "granted") {
+        say("Tilt needs motion access.");
+        return;
+      }
+    }
+    setTilt(true);
+  });
+}
+
+// Degrees of lean before tilt starts a direction, and the lower mark it must
+// fall back under to stop.
+const TILT_ON = 8;
+const TILT_OFF = 5;
+
+// Turn the phone's two tilt angles into "how far it leans to the right of the
+// screen" and "how far it leans toward the bottom of the screen", whichever
+// way round the phone is being held.
+function screenTilt(beta, gamma) {
+  const reported = screen.orientation ? screen.orientation.angle : window.orientation;
+  const angle = (((reported || 0) % 360) + 360) % 360;
+  if (angle === 90) return [beta, -gamma];
+  if (angle === 270) return [-beta, gamma];
+  if (angle === 180) return [-gamma, -beta];
+  return [gamma, beta];
 }
