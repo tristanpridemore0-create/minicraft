@@ -1,14 +1,18 @@
-import { Entity } from "./entity.js";
+// Particles are drawn and ticked like entities but never collide with anything,
+// so they are plain objects rather than Entity subclasses.
 
 // A damage number that pops up, arcs and bounces before fading.
-export class TextParticle extends Entity {
+export class TextParticle {
   constructor(msg, x, y, col) {
-    super(x, y);
     this.type = "text";
     this.msg = String(msg);
     this.col = col;
+    this.x = x;
+    this.y = y;
     this.xr = 0;
     this.yr = 0;
+    this.removed = false;
+    this.level = null;
     this.time = 0;
     this.xx = x;
     this.yy = y;
@@ -36,12 +40,15 @@ export class TextParticle extends Entity {
 }
 
 // A short white burst where something was hit.
-export class SmashParticle extends Entity {
+export class SmashParticle {
   constructor(x, y) {
-    super(x, y);
     this.type = "smash";
+    this.x = x;
+    this.y = y;
     this.xr = 0;
     this.yr = 0;
+    this.removed = false;
+    this.level = null;
     this.time = 0;
   }
 

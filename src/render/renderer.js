@@ -66,7 +66,7 @@ export class Renderer {
 
     const onScreen = (e) => e.x > cx - 24 && e.x < cx + VIEW_W + 24 && e.y > cy - 32 && e.y < cy + WORLD_H + 24;
     const ents = level.entities.filter((e) => !e.removed && onScreen(e));
-    ents.push(game.player);
+    if (!game.dead) ents.push(game.player);
     const overhead = (e) => e.type === "text" || e.type === "smash";
     ents.sort((a, b) => overhead(a) - overhead(b) || a.y - b.y);
     for (const e of ents) this.drawEntity(ctx, e, tick);
@@ -80,16 +80,16 @@ export class Renderer {
     const y = Math.floor(e.y - this.cy);
     switch (e.type) {
       case "player":
-        this.drawPlayer(ctx, e, x - 8, y - 9, tick);
+        this.drawPlayer(ctx, e, x - 8, y - 11, tick);
         break;
       case "mob": {
         const pal = e.hurtTime > 0 ? "white" : `${e.kind}_${e.color}`;
         if (e.kind === "slime") {
-          const up = e.jump > 0 ? 1 : 0;
-          ctx.drawImage(sprite(`slime_${up}`, pal), x - 8, y - 9 - up * 4);
+          const up = e.jumpTime > 0 ? 1 : 0;
+          ctx.drawImage(sprite(`slime_${up}`, pal), x - 8, y - 11 - up * 4);
         } else {
           const name = `zombie_${DIR_NAME[e.dir]}_${(e.walk >> 3) & 1}`;
-          ctx.drawImage(sprite(name, pal, e.dir === DIR.LEFT), x - 8, y - 9);
+          ctx.drawImage(sprite(name, pal, e.dir === DIR.LEFT), x - 8, y - 11);
         }
         break;
       }
@@ -102,16 +102,17 @@ export class Renderer {
         break;
       }
       case "spark": {
-        const n = tick + e.life;
+        if (e.time >= e.lifeTime - 120 && ((e.time / 6) | 0) % 2 === 0) return;
+        const n = tick + e.time;
         ctx.drawImage(sprite("spark", "black", !!(n & 2), !!(n & 4)), x - 4, y - 2);
         ctx.drawImage(sprite("spark", "white", !!(n & 2), !!(n & 4)), x - 4, y - 4);
         break;
       }
       case "furniture":
-        ctx.drawImage(furnitureSprite(e.kind, e.hurtTime > 0), x - 8, y - 9);
+        ctx.drawImage(furnitureSprite(e.kind), x - 8, y - 12);
         break;
       case "item": {
-        if (e.life < 120 && tick & 4) return;
+        if (e.time >= e.lifeTime - 120 && ((e.time / 6) | 0) % 2 === 0) return;
         ctx.drawImage(icon(e.itemId, true), x - 4, y - 4);
         ctx.drawImage(icon(e.itemId), x - 4, y - 4 - Math.floor(e.zz || 0));
         break;
@@ -133,7 +134,7 @@ export class Renderer {
     const pal = p.hurtTime > 0 ? "white" : "player";
     const body = sprite(`body_${DIR_NAME[p.dir]}_${(p.walk >> 3) & 1}`, pal, p.dir === DIR.LEFT);
 
-    if (p.attackTime > 0 && p.dir === DIR.UP) this.drawSwing(ctx, p, x, y);
+    if (p.attackTime > 0 && p.attackDir === DIR.UP) this.drawSwing(ctx, p, x, y);
 
     if (p.swimming) {
       // Only the top half shows, bobbing in a ring of ripples.
@@ -158,19 +159,18 @@ export class Renderer {
       ctx.drawImage(furnitureSprite(held.furniture), x, y - 12);
     }
 
-    if (p.attackTime > 0 && p.dir !== DIR.UP) this.drawSwing(ctx, p, x, y);
+    if (p.attackTime > 0 && p.attackDir !== DIR.UP) this.drawSwing(ctx, p, x, y);
   }
 
   drawSwing(ctx, p, x, y) {
     ctx.save();
     ctx.translate(x + 8, y + 8);
-    ctx.rotate(SLASH_ANGLE[p.dir]);
+    ctx.rotate(SLASH_ANGLE[p.attackDir]);
     ctx.drawImage(sprite("slash", "white"), -8, -13);
     ctx.restore();
-    const slot = p.activeSlot();
-    if (slot) {
-      const [ox, oy] = SLASH_ICON[p.dir];
-      ctx.drawImage(icon(slot.id), x + ox, y + oy);
+    if (p.attackItem) {
+      const [ox, oy] = SLASH_ICON[p.attackDir];
+      ctx.drawImage(icon(p.attackItem), x + ox, y + oy);
     }
   }
 
@@ -231,8 +231,12 @@ export class Renderer {
     for (let i = 0; i < p.maxHealth; i++) {
       ctx.drawImage(sprite("heart", i < p.health ? "heart" : "heartEmpty"), i * 8, WORLD_H);
     }
+    // Worn out: the whole stamina row flashes until it starts to refill.
+    const wornOut = p.staminaRechargeDelay > 0;
+    const flash = ((p.staminaRechargeDelay / 4) | 0) % 2 === 0 ? "boltFlash" : "boltEmpty";
     for (let i = 0; i < p.maxStamina; i++) {
-      ctx.drawImage(sprite("bolt", i < p.stamina ? "bolt" : "boltEmpty"), i * 8, WORLD_H + 8);
+      const pal = wornOut ? flash : i < p.stamina ? "bolt" : "boltEmpty";
+      ctx.drawImage(sprite("bolt", pal), i * 8, WORLD_H + 8);
     }
     const slot = p.activeSlot();
     if (slot) drawItem(ctx, slot, 80, WORLD_H);

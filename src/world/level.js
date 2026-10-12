@@ -1,9 +1,19 @@
-import { MAP, TILE } from "../constants.js";
-import { Tile, solid, liquid, holeLike, walkable, floorOf, tileHp, harvestKind } from "./tiles.js";
+import { MAP, TILE, TOOL, TIER } from "../constants.js";
+import { Tile, solid, liquid, holeLike, walkable } from "./tiles.js";
 import { TextParticle, SmashParticle } from "../entities/particles.js";
+import { ItemEntity } from "../entities/itemEntity.js";
 import { C } from "../render/palette.js";
-import { TOOL } from "../constants.js";
-import { canMineHardRock, canMineOre, toolBonus, itemDef } from "../items/defs.js";
+
+const rnd = (n) => (Math.random() * n) | 0;
+
+const NEIGHBOURS = [
+  [-1, 0],
+  [1, 0],
+  [0, -1],
+  [0, 1],
+];
+const ORE_ITEM = { [Tile.ironOre]: "ironOre", [Tile.goldOre]: "goldOre", [Tile.gemOre]: "gem" };
+const isWheat = (id) => id >= Tile.wheat0 && id <= Tile.wheat3;
 
 export class Level {
   constructor(id, data) {
@@ -11,24 +21,41 @@ export class Level {
     this.w = data.w;
     this.h = data.h;
     this.tiles = data.tiles;
+    // Per-tile extras: `data` is an age (crops, saplings, farmland) or a
+    // footprint timer (sand); `hurt` is damage taken so far.
+    this.data = new Uint8Array(MAP * MAP);
     this.hurt = new Int16Array(MAP * MAP);
     this.entities = [];
-    this.tick = 0;
   }
 
   idx(x, y) {
     return x + y * this.w;
   }
 
+  inside(x, y) {
+    return x >= 0 && y >= 0 && x < this.w && y < this.h;
+  }
+
   get(x, y) {
-    if (x < 0 || y < 0 || x >= this.w || y >= this.h) return Tile.rock;
+    if (!this.inside(x, y)) return Tile.rock;
     return this.tiles[this.idx(x, y)];
   }
 
-  set(x, y, id) {
-    if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
-    this.tiles[this.idx(x, y)] = id;
-    this.hurt[this.idx(x, y)] = 0;
+  getData(x, y) {
+    return this.inside(x, y) ? this.data[this.idx(x, y)] : 0;
+  }
+
+  set(x, y, id, data = 0) {
+    if (!this.inside(x, y)) return;
+    const i = this.idx(x, y);
+    this.tiles[i] = id;
+    this.data[i] = data;
+    this.hurt[i] = 0;
+  }
+
+  // Bare ground on this level: what is left when something is dug out.
+  floor() {
+    return this.id < 0 ? Tile.stoneFloor : Tile.dirt;
   }
 
   blocked(px, py, xr = 5, yr = 5, canSwim = true) {
@@ -61,154 +88,227 @@ export class Level {
     return this.entities.filter((e) => !e.removed && e !== except && e.x + e.xr > x0 && e.x - e.xr < x1 && e.y + e.yr > y0 && e.y - e.yr < y1);
   }
 
-  tryHitTile(tx, ty, player, drops) {
-    const id = this.get(tx, ty);
-    if (id === Tile.stairsDown || id === Tile.stairsUp) return false;
-    const item = player.activeItem();
-    const kind = harvestKind(id);
-    if (id === Tile.hardRock && !canMineHardRock(item)) return false;
-    if (kind === "ore" && !canMineOre(item)) return false;
+  // Drop `n` single items somewhere inside a tile.
+  drop(tx, ty, itemId, n = 1) {
+    for (let i = 0; i < n; i++) {
+      this.add(new ItemEntity(tx * TILE + rnd(10) + 3, ty * TILE + rnd(10) + 3, itemId, 1));
+    }
+  }
 
-    if (id === Tile.grass && item && item.tool === TOOL.HOE) {
-      this.set(tx, ty, Tile.farm);
-      if (Math.random() < 0.15) drops.push({ id: "seeds", n: 1 });
-      return true;
-    }
-    if ((id === Tile.dirt || id === Tile.stoneFloor) && item && item.tool === TOOL.HOE) {
-      this.set(tx, ty, Tile.farm);
-      return true;
-    }
-    if ((id === Tile.grass || id === Tile.dirt || id === Tile.sand || id === Tile.stoneFloor || id === Tile.farm) && item && item.tool === TOOL.SHOVEL) {
-      if (id === Tile.grass && Math.random() < 0.1) drops.push({ id: "seeds", n: 1 });
-      if (id === Tile.sand) drops.push({ id: "sand", n: 1 });
-      else drops.push({ id: "dirt", n: 1 });
-      this.set(tx, ty, Tile.hole);
-      return true;
-    }
-    if (id === Tile.cloud && item && item.tool === TOOL.SHOVEL) {
-      drops.push({ id: "cloud", n: 1 });
-      return true;
-    }
-    if (id === Tile.flower) {
-      drops.push({ id: "flower", n: 1 + ((Math.random() < 0.5) | 0) });
-      this.set(tx, ty, Tile.grass);
-      return true;
-    }
-    if (id === Tile.wheat0 || id === Tile.wheat1 || id === Tile.wheat2 || id === Tile.wheat3) {
-      drops.push({ id: "seeds", n: 1 });
-      if (id === Tile.wheat3) drops.push({ id: "wheat", n: 1 + ((Math.random() < 0.5) | 0) });
-      this.set(tx, ty, Tile.dirt);
-      return true;
-    }
-    if (id === Tile.sapling || id === Tile.cactusSapling) {
-      this.set(tx, ty, floorOf(id));
-      return true;
-    }
-
-    const hpMax = tileHp(id);
-    if (hpMax <= 1 && !solid(id)) return false;
-
-    let dmg = 1 + toolBonus(item, kind);
-    if (player.stamina >= player.maxStamina - 1) dmg += 1;
-    this.hurt[this.idx(tx, ty)] += dmg;
+  hitFx(tx, ty, dmg) {
     this.add(new SmashParticle(tx * TILE + 8, ty * TILE + 8));
     this.add(new TextParticle(dmg, tx * TILE + 8, ty * TILE + 8, C(500)));
-
-    if (kind === "tree" && Math.random() < 0.08) drops.push({ id: "apple", n: 1 });
-    if (kind === "ore" && Math.random() < 0.35) {
-      const ore = id === Tile.ironOre ? "ironOre" : id === Tile.goldOre ? "goldOre" : "gem";
-      drops.push({ id: ore, n: 1 });
-    }
-
-    if (this.hurt[this.idx(tx, ty)] >= hpMax) {
-      this.breakTile(tx, ty, drops);
-    }
-    return true;
   }
 
-  breakTile(tx, ty, drops) {
+  // Add damage to a tile; true once it has taken `need` in total.
+  damage(tx, ty, dmg, need) {
+    this.hitFx(tx, ty, dmg);
+    const i = this.idx(tx, ty);
+    this.hurt[i] += dmg;
+    return this.hurt[i] >= need;
+  }
+
+  hitTree(tx, ty, dmg) {
+    if (rnd(10) === 0) this.drop(tx, ty, "apple");
+    if (!this.damage(tx, ty, dmg, 20)) return;
+    this.drop(tx, ty, "wood", rnd(2) + 1);
+    this.drop(tx, ty, "acorn", rnd(rnd(4) + 1));
+    this.set(tx, ty, Tile.grass);
+  }
+
+  hitRock(tx, ty, dmg, need) {
+    if (!this.damage(tx, ty, dmg, need)) return;
+    this.drop(tx, ty, "stone", rnd(4) + 1);
+    this.drop(tx, ty, "coal", rnd(2));
+    this.set(tx, ty, this.floor());
+  }
+
+  // Ore gives a little on most hits and breaks somewhere between the third
+  // and twelfth.
+  hitOre(tx, ty) {
     const id = this.get(tx, ty);
-    if (id === Tile.tree) {
-      drops.push({ id: "wood", n: 1 + ((Math.random() * 2) | 0) });
-      if (Math.random() < 0.8) drops.push({ id: "acorn", n: 1 + ((Math.random() < 0.5) | 0) });
-      this.set(tx, ty, Tile.grass);
-    } else if (id === Tile.rock || id === Tile.hardRock) {
-      drops.push({ id: "stone", n: 1 + ((Math.random() * 4) | 0) });
-      if (Math.random() < 0.25) drops.push({ id: "coal", n: 1 });
-      this.set(tx, ty, Tile.stoneFloor);
-    } else if (id === Tile.cactus) {
-      drops.push({ id: "cactus", n: 1 + ((Math.random() < 0.5) | 0) });
-      this.set(tx, ty, Tile.sand);
-    } else if (id === Tile.cloudCactus) {
-      this.set(tx, ty, Tile.cloud);
-    } else if (id === Tile.ironOre) {
-      drops.push({ id: "ironOre", n: 1 + ((Math.random() * 2) | 0) });
-      this.set(tx, ty, Tile.stoneFloor);
-    } else if (id === Tile.goldOre) {
-      drops.push({ id: "goldOre", n: 1 + ((Math.random() * 2) | 0) });
-      this.set(tx, ty, Tile.stoneFloor);
-    } else if (id === Tile.gemOre) {
-      drops.push({ id: "gem", n: 1 + ((Math.random() * 2) | 0) });
-      this.set(tx, ty, Tile.stoneFloor);
+    const i = this.idx(tx, ty);
+    const hits = this.hurt[i] + 1;
+    this.hitFx(tx, ty, 1);
+    let count = rnd(2);
+    if (hits >= rnd(10) + 3) {
+      this.set(tx, ty, this.floor());
+      count += 2;
+    } else {
+      this.hurt[i] = hits;
     }
+    this.drop(tx, ty, ORE_ITEM[id], count);
   }
 
-  placeItem(tx, ty, itemId) {
-    const def = itemDef(itemId);
-    if (!def || !def.place) return false;
-    const cur = this.get(tx, ty);
-    if (def.place === "sapling" && cur === Tile.grass) {
-      this.set(tx, ty, Tile.sapling);
+  harvest(tx, ty) {
+    const age = this.getData(tx, ty);
+    this.drop(tx, ty, "seeds", rnd(2));
+    if (age >= 50) this.drop(tx, ty, "wheat", rnd(3) + 2);
+    else if (age >= 40) this.drop(tx, ty, "wheat", rnd(2) + 1);
+    this.set(tx, ty, Tile.dirt);
+  }
+
+  // Using a tool on the tile in front. Every swing that does something costs
+  // stamina; a better tool costs less.
+  interact(tx, ty, player, item) {
+    if (!item || item.tool === undefined) return false;
+    const id = this.get(tx, ty);
+    const tool = item.tool;
+    const lvl = item.tier;
+    const cost = 4 - lvl;
+    const swing = () => rnd(10) + lvl * 5 + 10;
+
+    if (tool === TOOL.SHOVEL) {
+      if (id === Tile.grass && player.payStamina(cost)) {
+        this.set(tx, ty, Tile.dirt);
+        if (rnd(5) === 0) this.drop(tx, ty, "seeds");
+        return true;
+      }
+      if ((id === Tile.dirt || id === Tile.stoneFloor) && player.payStamina(cost)) {
+        this.set(tx, ty, Tile.hole);
+        this.drop(tx, ty, "dirt");
+        return true;
+      }
+      if (id === Tile.sand && player.payStamina(cost)) {
+        this.set(tx, ty, this.floor());
+        this.drop(tx, ty, "sand");
+        return true;
+      }
+      if ((id === Tile.farm || isWheat(id)) && player.payStamina(cost)) {
+        this.set(tx, ty, Tile.dirt);
+        return true;
+      }
+      if (id === Tile.flower && player.payStamina(cost)) {
+        this.drop(tx, ty, "flower", 2);
+        this.set(tx, ty, Tile.grass);
+        return true;
+      }
+      if (id === Tile.cloud && player.payStamina(5)) {
+        this.drop(tx, ty, "cloud", rnd(2) + 1);
+        return true;
+      }
+    }
+
+    if (tool === TOOL.HOE) {
+      if (id === Tile.grass && player.payStamina(cost)) {
+        if (rnd(5) === 0) this.drop(tx, ty, "seeds");
+        else this.set(tx, ty, Tile.farm);
+        return true;
+      }
+      if ((id === Tile.dirt || id === Tile.stoneFloor) && player.payStamina(cost)) {
+        this.set(tx, ty, Tile.farm);
+        return true;
+      }
+    }
+
+    if (tool === TOOL.AXE && id === Tile.tree && player.payStamina(cost)) {
+      this.hitTree(tx, ty, swing());
       return true;
     }
-    if (def.place === "cactusSapling" && cur === Tile.sand) {
-      this.set(tx, ty, Tile.cactusSapling);
-      return true;
-    }
-    if (def.place === "flower" && cur === Tile.grass) {
-      this.set(tx, ty, Tile.flower);
-      return true;
-    }
-    if (def.place === "wheat0" && cur === Tile.farm) {
-      this.set(tx, ty, Tile.wheat0);
-      return true;
-    }
-    if (def.place === "sand" && (cur === Tile.hole || liquid(cur))) {
-      this.set(tx, ty, Tile.sand);
-      return true;
-    }
-    if (def.place === "dirt" && (cur === Tile.hole || liquid(cur))) {
-      this.set(tx, ty, this.id < 0 ? Tile.stoneFloor : Tile.dirt);
-      return true;
-    }
-    if (def.place === "cloud" && cur === Tile.fall) {
-      this.set(tx, ty, Tile.cloud);
-      return true;
+
+    if (tool === TOOL.PICK) {
+      if (id === Tile.rock && player.payStamina(cost)) {
+        this.hitRock(tx, ty, swing(), 50);
+        return true;
+      }
+      if (id === Tile.hardRock && lvl === TIER.GEM && player.payStamina(cost)) {
+        this.hitRock(tx, ty, swing(), 200);
+        return true;
+      }
+      if (ORE_ITEM[id] && player.payStamina(6 - lvl)) {
+        this.hitOre(tx, ty);
+        return true;
+      }
+      if (id === Tile.cloudCactus && player.payStamina(6 - lvl)) {
+        if (this.damage(tx, ty, 1, 10)) this.set(tx, ty, Tile.cloud);
+        return true;
+      }
     }
     return false;
   }
 
-  grow() {
-    for (let i = 0; i < 40; i++) {
-      const x = (Math.random() * this.w) | 0;
-      const y = (Math.random() * this.h) | 0;
-      const t = this.get(x, y);
-      if (t === Tile.sapling && Math.random() < 0.05) this.set(x, y, Tile.tree);
-      if (t === Tile.cactusSapling && Math.random() < 0.05) this.set(x, y, Tile.cactus);
-      if (t === Tile.wheat0 || t === Tile.wheat1 || t === Tile.wheat2) {
-        if (Math.random() < 0.08) this.set(x, y, t + 1);
+  // A plain hit: a punch, or a swing with the wrong tool. Returns true if
+  // there was anything there to hit.
+  hurtTile(tx, ty, dmg) {
+    const id = this.get(tx, ty);
+    if (id === Tile.tree) this.hitTree(tx, ty, dmg);
+    else if (id === Tile.rock) this.hitRock(tx, ty, dmg, 50);
+    else if (id === Tile.hardRock || ORE_ITEM[id] || id === Tile.cloudCactus) this.hitFx(tx, ty, 0);
+    else if (id === Tile.cactus) {
+      if (this.damage(tx, ty, dmg, 10)) {
+        this.drop(tx, ty, "cactus", rnd(2) + 1);
+        this.set(tx, ty, Tile.sand);
       }
-      if (t === Tile.dirt && this.id === 0) {
-        const n = [this.get(x - 1, y), this.get(x + 1, y), this.get(x, y - 1), this.get(x, y + 1)];
-        if (n.some((v) => v === Tile.grass || v === Tile.flower) && Math.random() < 0.04) this.set(x, y, Tile.grass);
-      }
-      if (t === Tile.farm && Math.random() < 0.01) this.set(x, y, Tile.dirt);
+    } else if (id === Tile.flower) {
+      this.drop(tx, ty, "flower", rnd(2) + 1);
+      this.set(tx, ty, Tile.grass);
+    } else if (isWheat(id)) this.harvest(tx, ty);
+    else if (id === Tile.sapling) this.set(tx, ty, Tile.grass);
+    else if (id === Tile.cactusSapling) this.set(tx, ty, Tile.sand);
+    else return false;
+    return true;
+  }
+
+  // Putting a plantable item down on the tile in front.
+  plant(tx, ty, def) {
+    const cur = this.get(tx, ty);
+    const bare = cur === Tile.dirt || cur === Tile.stoneFloor;
+    if (def.place === "flower" && cur === Tile.grass) this.set(tx, ty, Tile.flower);
+    else if (def.place === "sapling" && cur === Tile.grass) this.set(tx, ty, Tile.sapling);
+    else if (def.place === "cactusSapling" && cur === Tile.sand) this.set(tx, ty, Tile.cactusSapling);
+    else if (def.place === "wheat0" && cur === Tile.farm) this.set(tx, ty, Tile.wheat0);
+    else if (def.place === "sand" && (cur === Tile.grass || bare)) this.set(tx, ty, Tile.sand);
+    else if (def.place === "dirt" && (cur === Tile.hole || liquid(cur))) this.set(tx, ty, this.floor());
+    else if (def.place === "cloud" && cur === Tile.fall) this.set(tx, ty, Tile.cloud);
+    else return false;
+    return true;
+  }
+
+  // Something alive just walked onto this tile.
+  steppedOn(tx, ty) {
+    if (!this.inside(tx, ty)) return;
+    const id = this.get(tx, ty);
+    const i = this.idx(tx, ty);
+    if (id === Tile.sand) this.data[i] = 10;
+    else if (id === Tile.farm) {
+      if (rnd(60) === 0 && this.data[i] >= 5) this.set(tx, ty, Tile.dirt);
+    } else if (isWheat(id)) {
+      if (rnd(60) === 0 && this.data[i] >= 2) this.harvest(tx, ty);
     }
   }
 
-  liquidAt(px, py) {
-    const t = this.tileAtPixel(px, py);
-    return { water: t === Tile.water, lava: t === Tile.lava };
+  // The world's slow clock: each game tick a fiftieth of the map, picked at
+  // random, gets a turn. This is what grows crops, spreads grass and lets
+  // water and lava run into holes.
+  tickTiles() {
+    const n = ((this.w * this.h) / 50) | 0;
+    for (let k = 0; k < n; k++) {
+      const x = rnd(this.w);
+      const y = rnd(this.h);
+      const i = this.idx(x, y);
+      const id = this.tiles[i];
+      if (id === Tile.grass) {
+        if (rnd(40) !== 0) continue;
+        const [dx, dy] = NEIGHBOURS[rnd(4)];
+        if (this.get(x + dx, y + dy) === Tile.dirt) this.set(x + dx, y + dy, Tile.grass);
+      } else if (id === Tile.water || id === Tile.lava) {
+        const [dx, dy] = NEIGHBOURS[rnd(4)];
+        if (this.get(x + dx, y + dy) === Tile.hole) this.set(x + dx, y + dy, id);
+      } else if (id === Tile.farm) {
+        if (this.data[i] < 5) this.data[i]++;
+      } else if (isWheat(id)) {
+        if (rnd(2) === 0 && this.data[i] < 50) {
+          this.data[i]++;
+          this.tiles[i] = Tile.wheat0 + Math.min(3, (this.data[i] / 10) | 0);
+        }
+      } else if (id === Tile.sapling || id === Tile.cactusSapling) {
+        if (++this.data[i] > 100) this.set(x, y, id === Tile.sapling ? Tile.tree : Tile.cactus);
+      } else if (id === Tile.sand) {
+        if (this.data[i] > 0) this.data[i]--;
+      } else if (id === Tile.tree || id === Tile.rock || id === Tile.hardRock || id === Tile.cactus) {
+        if (this.hurt[i] > 0) this.hurt[i]--;
+      }
+    }
   }
 }
 

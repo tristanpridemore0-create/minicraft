@@ -35,6 +35,7 @@ export class UI {
     this.chestWindow = 0;
     this.chestSel = [0, 0];
     this.bindsFrom = "title";
+    this.endDelay = 0;
   }
 
   toast(text) {
@@ -47,8 +48,18 @@ export class UI {
   }
 
   openInventory(player) {
+    // Whatever was in hand goes back to the top of the pack while you choose.
+    player.inv.putFront(player.held);
+    player.held = null;
     this.mode = "inventory";
-    this.sel = player.active;
+    this.sel = 0;
+  }
+
+  showEnd(mode) {
+    this.mode = mode;
+    this.sel = 0;
+    // A second of grace so a stray key press does not skip the screen.
+    this.endDelay = 60;
   }
 
   openStation(furn, player) {
@@ -133,25 +144,25 @@ export class UI {
 
   tickInv(game, in_) {
     const p = game.player;
-    const n = p.inv.slots.length;
-    if (in_.just("pause") || !n) {
-      if (in_.just("pause") || in_.just("menu") || in_.just("attack")) this.mode = "play";
+    if (in_.just("menu") || in_.just("pause")) {
+      this.mode = "play";
       return;
     }
+    const n = p.inv.slots.length;
+    if (!n) return;
     this.sel = Math.min(this.sel, n - 1);
     if (in_.just("up")) this.sel = (this.sel + n - 1) % n;
     if (in_.just("down")) this.sel = (this.sel + 1) % n;
-    if (in_.just("attack") || in_.just("menu")) {
-      p.active = this.sel;
+    if (in_.just("attack")) {
+      // Take the chosen item in hand.
+      p.held = p.inv.slots.splice(this.sel, 1)[0];
       this.mode = "play";
       return;
     }
     if (in_.just("drop")) {
       const s = p.inv.takeAt(this.sel);
       if (s) game.dropAtPlayer(s.id, 1);
-      const left = p.inv.slots.length;
-      this.sel = Math.max(0, Math.min(this.sel, left - 1));
-      p.active = Math.max(0, Math.min(p.active, left - 1));
+      this.sel = Math.max(0, Math.min(this.sel, p.inv.slots.length - 1));
     }
   }
 
@@ -167,7 +178,6 @@ export class UI {
       const r = list[this.sel];
       if (game.player.inv.pay(r.cost)) {
         game.player.inv.add(r.result, r.count);
-        game.player.active = Math.min(game.player.active, game.player.inv.slots.length - 1);
         game.audio.craft();
       }
     }
@@ -192,8 +202,6 @@ export class UI {
         const [s] = from.slots.splice(this.chestSel[w], 1);
         to.add(s.id, s.count, s.extra);
         this.chestSel[w] = Math.max(0, Math.min(this.chestSel[w], from.slots.length - 1));
-        const p = game.player;
-        p.active = Math.max(0, Math.min(p.active, p.inv.slots.length - 1));
       }
     }
   }
@@ -211,6 +219,10 @@ export class UI {
   }
 
   tickEnd(game, in_) {
+    if (this.endDelay > 0) {
+      this.endDelay--;
+      return;
+    }
     if (in_.just("attack") || in_.just("menu")) {
       this.mode = "title";
       this.sel = 0;
@@ -358,8 +370,10 @@ export class UI {
   drawEnd(ctx, game, line, hint) {
     drawFrame(ctx, "", 1, 3, 18, 9);
     drawText(ctx, line, 16, 32, C(555));
-    drawText(ctx, "Time:", 16, 48, C(555));
-    drawText(ctx, playTime(game.tick), 64, 48, C(550));
+    drawText(ctx, "Time:", 16, 40, C(555));
+    drawText(ctx, playTime(game.tick), 56, 40, C(550));
+    drawText(ctx, "Score:", 16, 48, C(555));
+    drawText(ctx, String(game.player.score), 64, 48, C(550));
     drawText(ctx, hint, 16, 64, C(333));
   }
 }
