@@ -16,6 +16,28 @@ import { Tile, walkable } from "./world/tiles.js";
 
 const rnd = (n) => (Math.random() * n) | 0;
 
+// What you carry in build mode. None of it runs out.
+const BUILD_KIT = [
+  "gemAxe",
+  "gemShovel",
+  "gemHoe",
+  "powerGlove",
+  "stone",
+  "dirt",
+  "sand",
+  "cloud",
+  "acorn",
+  "flower",
+  "cactus",
+  "seeds",
+  "workbench",
+  "chest",
+  "oven",
+  "furnace",
+  "anvil",
+  "lantern",
+];
+
 export class Game {
   constructor(canvas) {
     this.canvas = canvas;
@@ -35,6 +57,8 @@ export class Game {
     this.wonTimer = 0;
     this.wizardDead = false;
     this.flags = {};
+    // Build mode: a world with no monsters, no damage and a full kit.
+    this.build = false;
     this.acc = 0;
     this.last = performance.now();
     canvas.addEventListener("pointerdown", () => this.audio.unlock());
@@ -45,7 +69,8 @@ export class Game {
     return hasSave();
   }
 
-  newGame(seed) {
+  newGame(seed, build = false) {
+    this.build = build;
     this.seed = seed >>> 0 || 1;
     const raw = generateWorld(this.seed);
     this.levels = {};
@@ -64,6 +89,14 @@ export class Game {
     this.wizardDead = false;
     this.flags = {};
     this.ui.mode = "play";
+    if (build) {
+      this.player.build = true;
+      this.player.held = { id: "gemPick", count: 1, extra: null };
+      this.player.inv = new Inventory(BUILD_KIT.map((id) => ({ id, count: 1 })));
+      for (const lv of Object.values(this.levels)) lv.instant = true;
+      this.ui.toast("Build mode. Nothing can hurt you.");
+      return;
+    }
     this.ui.toast("Punch trees for wood. X opens your pack.");
     this.spawnWizard();
     // The world starts out populated, day or night.
@@ -73,7 +106,7 @@ export class Game {
   load() {
     const data = readSave();
     if (!data) return;
-    this.newGame(data.seed);
+    this.newGame(data.seed, !!data.build);
     applyMutations(this.levels, data.mutations);
     for (const [id, cells] of Object.entries(data.tileData || {})) {
       const lv = this.levels[id];
@@ -232,7 +265,7 @@ export class Game {
       }
       level.removeDead();
       level.tickTiles();
-      this.trySpawn(level, 1);
+      if (!this.build) this.trySpawn(level, 1);
       if (running) {
         checkProgress(this);
         if (this.tick % 7200 === 0) this.save();

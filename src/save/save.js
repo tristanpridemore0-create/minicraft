@@ -29,9 +29,11 @@ export function writeSave(game) {
     items[id] = live.filter((e) => e.type === "item").map((e) => ({ x: e.x, y: e.y, id: e.itemId, count: e.count, time: e.time }));
   }
   const wiz = game.levels[LEVEL.SKY].entities.find((e) => e.type === "wizard" && !e.removed);
+  // Build mode has no wizard, so there is nothing to record for him.
   const p = game.player;
   const data = {
     version: 2,
+    build: game.build,
     seed: game.seed,
     tick: game.tick,
     won: game.won,

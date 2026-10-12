@@ -33,6 +33,8 @@ export class Player extends Entity {
     this.swimming = false;
     this.bumped = null;
     this.score = 0;
+    // Build mode: nothing hurts, nothing tires you, nothing runs out.
+    this.build = false;
     this.xr = 4;
     this.yr = 3;
   }
@@ -50,6 +52,7 @@ export class Player extends Entity {
   }
 
   payStamina(cost) {
+    if (this.build) return true;
     if (cost > this.stamina) return false;
     if (cost > 0) this.stamina -= cost;
     return true;
@@ -57,11 +60,12 @@ export class Player extends Entity {
 
   // Use up one of whatever is in hand.
   spendHeld() {
+    if (this.build) return;
     if (this.held && --this.held.count <= 0) this.held = null;
   }
 
   hurtFrom(amt, dir, game) {
-    if (this.invuln > 0 || this.hurtTime > 0 || game.dead) return;
+    if (this.build || this.invuln > 0 || this.hurtTime > 0 || game.dead) return;
     this.health -= amt;
     this.level.add(new TextParticle(amt, this.x, this.y, C(504)));
     this.knockback(dir);
@@ -114,7 +118,7 @@ export class Player extends Entity {
     if (game.input.held("right")) xa++;
 
     // Swimming costs a point of stamina a second, then a point of health.
-    if (this.swimming && this.tickTime % 60 === 0) {
+    if (!this.build && this.swimming && this.tickTime % 60 === 0) {
       if (this.stamina > 0) this.stamina--;
       else this.hurtFrom(1, this.dir ^ 1, game);
     }
@@ -128,7 +132,7 @@ export class Player extends Entity {
     }
 
     if (game.input.just("attack") && this.stamina > 0) {
-      this.stamina--;
+      if (!this.build) this.stamina--;
       this.staminaRecharge = 0;
       this.attack(game);
     }
@@ -241,6 +245,16 @@ export class Player extends Entity {
       if (this.health >= this.maxHealth || !this.payStamina(item.staminaCost)) return false;
       this.heal(item.heal);
       this.spendHeld();
+      return true;
+    }
+    // Build mode only: stone goes down as a wall on open ground.
+    if (this.build && item.id === "stone") {
+      const here = level.get(tx, ty);
+      const open = here === Tile.grass || here === Tile.dirt || here === Tile.stoneFloor || here === Tile.sand;
+      const cx = tx * TILE + 8;
+      const cy = ty * TILE + 8;
+      if (!open || level.entitiesIn(cx - 8, cy - 8, cx + 8, cy + 8).some((e) => e.type === "furniture")) return false;
+      level.set(tx, ty, Tile.rock);
       return true;
     }
     if (item.kind === "place") {

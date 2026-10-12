@@ -44,7 +44,8 @@ export class UI {
   }
 
   titleItems(game) {
-    return game.hasSave() ? ["Continue", "New world", "Seed", "Controls"] : ["New world", "Seed", "Controls"];
+    const items = ["New world", "Build mode", "Seed", "Controls"];
+    return game.hasSave() ? ["Continue", ...items] : items;
   }
 
   openInventory(player) {
@@ -100,6 +101,7 @@ export class UI {
       const it = items[this.sel];
       if (it === "Continue") game.load();
       if (it === "New world") game.newGame(Number(this.seedText) || Date.now());
+      if (it === "Build mode") game.newGame(Number(this.seedText) || Date.now(), true);
       if (it === "Seed") {
         const s = prompt("World seed (number):", this.seedText);
         if (s != null) this.seedText = s;
@@ -281,10 +283,10 @@ export class UI {
     drawText(ctx, "MINICRAFT", 10, 16, C(10), 2);
     drawText(ctx, "MINICRAFT", 9, 15, C(131), 2);
     drawText(ctx, "MINICRAFT", 8, 14, C(551), 2);
-    this.drawOptions(ctx, this.titleItems(game), 48);
+    this.drawOptions(ctx, this.titleItems(game), 42);
     const seed = `Seed ${this.seedText}`.slice(0, 20);
-    drawText(ctx, seed, (VIEW_W - textWidth(seed)) / 2, 92, C(222));
-    drawText(ctx, "(Arrow keys,X and C)", 0, 108, C(111));
+    drawText(ctx, seed, (VIEW_W - textWidth(seed)) / 2, 96, C(222));
+    drawText(ctx, "(Arrow keys,X and C)", 0, 110, C(111));
   }
 
   drawPause(ctx) {

@@ -26,6 +26,8 @@ export class Level {
     this.data = new Uint8Array(MAP * MAP);
     this.hurt = new Int16Array(MAP * MAP);
     this.entities = [];
+    // Build mode: everything breaks on the first hit.
+    this.instant = false;
   }
 
   idx(x, y) {
@@ -105,7 +107,7 @@ export class Level {
     this.hitFx(tx, ty, dmg);
     const i = this.idx(tx, ty);
     this.hurt[i] += dmg;
-    return this.hurt[i] >= need;
+    return this.instant || this.hurt[i] >= need;
   }
 
   hitTree(tx, ty, dmg) {
@@ -131,7 +133,7 @@ export class Level {
     const hits = this.hurt[i] + 1;
     this.hitFx(tx, ty, 1);
     let count = rnd(2);
-    if (hits >= rnd(10) + 3) {
+    if (this.instant || hits >= rnd(10) + 3) {
       this.set(tx, ty, this.floor());
       count += 2;
     } else {

@@ -200,7 +200,7 @@ export class Renderer {
     this.light.fill(0);
     const p = game.player;
     const held = p.activeItem();
-    this.addLight(p.x - cx, p.y - cy - 2, held && held.id === "lantern" ? 72 : 40);
+    this.addLight(p.x - cx, p.y - cy - 2, game.build ? 96 : held && held.id === "lantern" ? 72 : 40);
     for (const e of level.entities) {
       if (e.type === "furniture" && e.kind === "lantern" && !e.removed) this.addLight(e.x - cx, e.y - cy, 64);
     }
