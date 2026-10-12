@@ -59,6 +59,8 @@ export class Game {
     this.flags = {};
     // Build mode: a world with no monsters, no damage and a full kit.
     this.build = false;
+    // The world last written to, or read from, the save slot.
+    this.savedWorld = null;
     this.acc = 0;
     this.last = performance.now();
     canvas.addEventListener("pointerdown", () => this.audio.unlock());
@@ -169,6 +171,7 @@ export class Game {
         wiz.health = data.wizard.health;
       }
     }
+    this.savedWorld = this.worldId();
     this.ui.mode = "play";
     this.ui.toast("Loaded");
   }
@@ -176,6 +179,20 @@ export class Game {
   save() {
     if (!this.player) return;
     writeSave(this);
+    this.savedWorld = this.worldId();
+  }
+
+  // Which world this is, to tell it apart from the one in the save slot.
+  worldId() {
+    return `${this.seed}:${this.build ? "build" : "normal"}`;
+  }
+
+  // Called when the page is hidden or closed, so progress since the last
+  // autosave is not lost. A brand-new world does not replace a different
+  // saved one until it has been played for as long as the autosave waits.
+  saveOnLeave() {
+    if (!this.player || this.dead) return;
+    if (this.savedWorld === this.worldId() || !hasSave() || this.tick >= 7200) this.save();
   }
 
   spawnWizard() {

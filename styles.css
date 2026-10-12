@@ -125,8 +125,7 @@ body.touch-on #wrap {
 }
 
 .touch-btn,
-.touch-pause,
-.touch-full {
+.touch-small {
   font: inherit;
   color: #fff;
   background: rgba(255, 255, 255, 0.14);
@@ -160,16 +159,38 @@ body.touch-on #wrap {
   margin-top: 0.15em;
 }
 
-.touch-pause {
+/* The row of small buttons in the top right corner: pause first, then full
+   screen and tilt on devices that can do them. */
+.touch-top {
   position: absolute;
   top: calc(var(--edge) + env(safe-area-inset-top));
   right: calc(var(--edge) + env(safe-area-inset-right));
+  display: flex;
+  flex-direction: row-reverse;
+  gap: 10px;
+}
+
+.touch-small {
   width: 44px;
   height: 44px;
   border-radius: 10px;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: bold;
+}
+
+.touch-pause {
+  font-size: 15px;
   letter-spacing: 0.1em;
+}
+
+.touch-tilt {
+  font-size: 11px;
+}
+
+/* Lit while tilt-to-walk is switched on. */
+.touch-tilt.on {
+  background: rgba(127, 194, 56, 0.55);
+  border-color: rgba(190, 240, 130, 0.9);
 }
 
 /* Held sideways, the controls live in the black bars beside the picture, so
@@ -194,28 +215,15 @@ body.touch-on #wrap {
   }
 }
 
-/* Full screen sits beside pause. It is only added where the browser allows it. */
-.touch-full {
-  position: absolute;
-  top: calc(var(--edge) + env(safe-area-inset-top));
-  right: calc(var(--edge) + 54px + env(safe-area-inset-right));
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: bold;
-}
-
-/* Held upright, keep both off the picture: tuck them just under the game. */
+/* Held upright, keep them off the picture: tuck them just under the game. */
 @media (orientation: portrait) {
-  .touch-pause,
-  .touch-full {
+  .touch-top {
     top: calc(100vw * 3 / 4 + var(--edge) + env(safe-area-inset-top));
   }
 }
 
 .touch-btn.held,
-.touch-pause.held,
+.touch-small.held,
 .touch-full:active {
   background: rgba(255, 255, 255, 0.4);
 }
@@ -226,7 +234,8 @@ body.touch-zoomed #game {
   touch-action: pinch-zoom;
 }
 
-.touch-zoom-note {
+.touch-zoom-note,
+.touch-msg {
   display: none;
   position: absolute;
   top: calc(var(--edge) + env(safe-area-inset-top));
@@ -241,6 +250,7 @@ body.touch-zoomed #game {
   pointer-events: none;
 }
 
-body.touch-zoomed .touch-zoom-note {
+body.touch-zoomed .touch-zoom-note,
+.touch-msg.show {
   display: block;
 }
