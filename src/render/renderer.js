@@ -1,42 +1,22 @@
-import { TILE, VIEW_W, VIEW_H, SCALE, DIR } from "../constants.js";
+import { TILE, MAP, VIEW_W, VIEW_H, DIR } from "../constants.js";
 import { Tile } from "../world/tiles.js";
-import { spritePixels, buildSprites } from "./sprites.js";
-import { itemDef } from "../items/defs.js";
+import { C } from "./palette.js";
+import { drawTile, drawFallBackground } from "./tileart.js";
+import { sprite, furnitureSprite, icon } from "./sprites.js";
+import { drawText } from "./font.js";
+import { drawItem } from "./itemdraw.js";
 
-function itemSprite(id) {
-  const d = itemDef(id);
-  return d && d.sprite ? d.sprite : id;
-}
+// The bottom two text rows belong to the HUD; the world fills the rest.
+export const HUD_H = 16;
+export const WORLD_H = VIEW_H - HUD_H;
 
-const TILE_COL = {
-  [Tile.grass]: ["#4c9a20", "#3d8218"],
-  [Tile.dirt]: ["#8a5a30", "#6e4624"],
-  [Tile.sand]: ["#e0c860", "#c8b048"],
-  [Tile.water]: ["#1a64c8", "#1450a8"],
-  [Tile.lava]: ["#e05010", "#a02808"],
-  [Tile.rock]: ["#7a7a7a", "#5a5a5a"],
-  [Tile.hardRock]: ["#505060", "#303040"],
-  [Tile.stoneFloor]: ["#6a6a6a", "#585858"],
-  [Tile.hole]: ["#1a120c", "#100c08"],
-  [Tile.fall]: ["#000008", "#000010"],
-  [Tile.cloud]: ["#e8e8f8", "#d0d0e8"],
-  [Tile.flower]: ["#4c9a20", "#3d8218"],
-  [Tile.tree]: ["#4c9a20", "#3d8218"],
-  [Tile.cactus]: ["#e0c860", "#c8b048"],
-  [Tile.farm]: ["#6e4624", "#5a381c"],
-  [Tile.ironOre]: ["#8a7060", "#6a5040"],
-  [Tile.goldOre]: ["#8a7a40", "#6a5a28"],
-  [Tile.gemOre]: ["#406878", "#284858"],
-  [Tile.stairsDown]: ["#6a6a6a", "#404040"],
-  [Tile.stairsUp]: ["#6a6a6a", "#909090"],
-  [Tile.sapling]: ["#4c9a20", "#3d8218"],
-  [Tile.cactusSapling]: ["#e0c860", "#c8b048"],
-  [Tile.wheat0]: ["#6e4624", "#5a381c"],
-  [Tile.wheat1]: ["#6e4624", "#5a381c"],
-  [Tile.wheat2]: ["#6e4624", "#5a381c"],
-  [Tile.wheat3]: ["#6e4624", "#5a381c"],
-  [Tile.cloudCactus]: ["#e8e8f8", "#d0d0e8"],
-};
+// Cave darkness is a 4x4 ordered dither: the dimmer the light at a pixel, the
+// more of the pattern is painted black.
+const DITHER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+
+const DIR_NAME = ["down", "up", "side", "side"];
+const SLASH_ANGLE = { [DIR.UP]: 0, [DIR.DOWN]: Math.PI, [DIR.LEFT]: -Math.PI / 2, [DIR.RIGHT]: Math.PI / 2 };
+const SLASH_ICON = { [DIR.UP]: [4, -6], [DIR.DOWN]: [4, 14], [DIR.LEFT]: [-6, 4], [DIR.RIGHT]: [14, 4] };
 
 export class Renderer {
   constructor(canvas) {
@@ -48,14 +28,20 @@ export class Renderer {
     this.bctx = this.buf.getContext("2d");
     this.bctx.imageSmoothingEnabled = false;
     this.ctx.imageSmoothingEnabled = false;
-    buildSprites();
-    this.spriteCache = new Map();
+    this.light = new Uint8Array(VIEW_W * WORLD_H);
+    this.lightCanvas = document.createElement("canvas");
+    this.lightCanvas.width = VIEW_W;
+    this.lightCanvas.height = WORLD_H;
+    this.lctx = this.lightCanvas.getContext("2d");
+    this.lightImg = this.lctx.createImageData(VIEW_W, WORLD_H);
+    this.cx = 0;
+    this.cy = 0;
   }
 
   cam(player) {
-    let cx = Math.floor(player.x - VIEW_W / 2);
-    let cy = Math.floor(player.y - VIEW_H / 2);
-    return { cx, cy };
+    const clamp = (v, max) => Math.max(0, Math.min(max, v));
+    this.cx = clamp(Math.floor(player.x - VIEW_W / 2), MAP * TILE - VIEW_W);
+    this.cy = clamp(Math.floor(player.y - WORLD_H / 2), MAP * TILE - WORLD_H);
   }
 
   frame(game) {
@@ -64,180 +50,192 @@ export class Renderer {
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     if (!game.player || !game.player.level) return;
     const level = game.player.level;
-    const { cx, cy } = this.cam(game.player);
-    const t0x = Math.floor(cx / TILE);
-    const t0y = Math.floor(cy / TILE);
+    this.cam(game.player);
+    const { cx, cy } = this;
     const tick = game.tick;
 
-    for (let ty = t0y; ty <= t0y + 9; ty++) {
-      for (let tx = t0x; tx <= t0x + 11; tx++) {
-        this.drawTile(ctx, level, tx, ty, cx, cy, tick);
+    if (level.id === 1) drawFallBackground(ctx, cx, cy, VIEW_W, WORLD_H);
+
+    const tx1 = Math.floor((cx + VIEW_W - 1) / TILE);
+    const ty1 = Math.floor((cy + WORLD_H - 1) / TILE);
+    for (let ty = Math.floor(cy / TILE); ty <= ty1; ty++) {
+      for (let tx = Math.floor(cx / TILE); tx <= tx1; tx++) {
+        drawTile(ctx, level, tx, ty, tx * TILE - cx, ty * TILE - cy, tick);
       }
     }
 
-    const ents = [...level.entities, game.player].sort((a, b) => a.y - b.y);
-    for (const e of ents) {
-      if (e.removed) continue;
-      this.drawEntity(ctx, e, cx, cy, tick);
-    }
+    const onScreen = (e) => e.x > cx - 24 && e.x < cx + VIEW_W + 24 && e.y > cy - 32 && e.y < cy + WORLD_H + 24;
+    const ents = level.entities.filter((e) => !e.removed && onScreen(e));
+    ents.push(game.player);
+    const overhead = (e) => e.type === "text" || e.type === "smash";
+    ents.sort((a, b) => overhead(a) - overhead(b) || a.y - b.y);
+    for (const e of ents) this.drawEntity(ctx, e, tick);
 
-    this.drawFog(ctx, level, cx, cy);
+    if (level.id < 0) this.drawDarkness(ctx, game, level);
     this.drawHud(ctx, game);
   }
 
-  drawTile(ctx, level, tx, ty, cx, cy, tick) {
-    const id = level.get(tx, ty);
-    const x = tx * TILE - cx;
-    const y = ty * TILE - cy;
-    const pal = TILE_COL[id] || ["#222", "#111"];
-    const wob = id === Tile.water || id === Tile.lava ? ((tx + ty + (tick >> 4)) & 1) : (tx + ty) & 1;
-    ctx.fillStyle = pal[wob];
-    ctx.fillRect(x, y, TILE, TILE);
-    ctx.fillStyle = pal[1 - wob];
-    ctx.fillRect(x + 2, y + 2, 3, 3);
-    ctx.fillRect(x + 9, y + 8, 4, 3);
-
-    if (id === Tile.tree) {
-      ctx.fillStyle = "#3a220c";
-      ctx.fillRect(x + 7, y + 10, 3, 6);
-      ctx.fillStyle = "#2e7a18";
-      ctx.fillRect(x + 3, y + 1, 10, 10);
-      ctx.fillStyle = "#246014";
-      ctx.fillRect(x + 5, y + 3, 6, 6);
-    } else if (id === Tile.flower) {
-      ctx.fillStyle = "#f0f0e0";
-      ctx.fillRect(x + 4, y + 5, 2, 2);
-      ctx.fillStyle = "#f0d040";
-      ctx.fillRect(x + 10, y + 8, 2, 2);
-    } else if (id === Tile.cactus || id === Tile.cloudCactus) {
-      ctx.fillStyle = "#2a8a28";
-      ctx.fillRect(x + 6, y + 2, 4, 12);
-      ctx.fillRect(x + 3, y + 5, 3, 3);
-      ctx.fillRect(x + 10, y + 8, 3, 3);
-    } else if (id === Tile.sapling) {
-      ctx.fillStyle = "#3a7a18";
-      ctx.fillRect(x + 7, y + 8, 2, 6);
-      ctx.fillRect(x + 6, y + 6, 4, 3);
-    } else if (id === Tile.cactusSapling) {
-      ctx.fillStyle = "#2a8a28";
-      ctx.fillRect(x + 7, y + 8, 2, 6);
-    } else if (id === Tile.wheat0 || id === Tile.wheat1 || id === Tile.wheat2 || id === Tile.wheat3) {
-      const h = 4 + (id - Tile.wheat0) * 3;
-      ctx.fillStyle = id === Tile.wheat3 ? "#d8c050" : "#88a038";
-      ctx.fillRect(x + 4, y + 14 - h, 2, h);
-      ctx.fillRect(x + 8, y + 15 - h, 2, h - 1);
-      ctx.fillRect(x + 11, y + 14 - h, 2, h);
-    } else if (id === Tile.ironOre) {
-      ctx.fillStyle = "#c0a090";
-      ctx.fillRect(x + 5, y + 5, 3, 3);
-      ctx.fillRect(x + 10, y + 9, 3, 3);
-    } else if (id === Tile.goldOre) {
-      ctx.fillStyle = "#f0d040";
-      ctx.fillRect(x + 5, y + 5, 3, 3);
-      ctx.fillRect(x + 10, y + 9, 3, 3);
-    } else if (id === Tile.gemOre) {
-      ctx.fillStyle = "#40e0ff";
-      ctx.fillRect(x + 5, y + 5, 3, 3);
-      ctx.fillRect(x + 10, y + 9, 3, 3);
-    } else if (id === Tile.stairsDown) {
-      ctx.fillStyle = "#202020";
-      ctx.fillRect(x + 3, y + 3, 10, 10);
-      ctx.fillStyle = "#505050";
-      ctx.fillRect(x + 4, y + 4, 8, 2);
-      ctx.fillRect(x + 5, y + 7, 6, 2);
-      ctx.fillRect(x + 6, y + 10, 4, 2);
-    } else if (id === Tile.stairsUp) {
-      ctx.fillStyle = "#d0d0d0";
-      ctx.fillRect(x + 3, y + 3, 10, 10);
-      ctx.fillStyle = "#808080";
-      ctx.fillRect(x + 6, y + 4, 4, 2);
-      ctx.fillRect(x + 5, y + 7, 6, 2);
-      ctx.fillRect(x + 4, y + 10, 8, 2);
-    } else if (id === Tile.rock || id === Tile.hardRock) {
-      ctx.fillStyle = "#9a9a9a";
-      ctx.fillRect(x + 1, y + 2, 14, 3);
-      ctx.fillStyle = "#404040";
-      ctx.fillRect(x + 2, y + 11, 12, 3);
+  drawEntity(ctx, e, tick) {
+    const x = Math.floor(e.x - this.cx);
+    const y = Math.floor(e.y - this.cy);
+    switch (e.type) {
+      case "player":
+        this.drawPlayer(ctx, e, x - 8, y - 9, tick);
+        break;
+      case "mob": {
+        const pal = e.hurtTime > 0 ? "white" : `${e.kind}_${e.color}`;
+        if (e.kind === "slime") {
+          const up = e.jump > 0 ? 1 : 0;
+          ctx.drawImage(sprite(`slime_${up}`, pal), x - 8, y - 9 - up * 4);
+        } else {
+          const name = `zombie_${DIR_NAME[e.dir]}_${(e.walk >> 3) & 1}`;
+          ctx.drawImage(sprite(name, pal, e.dir === DIR.LEFT), x - 8, y - 9);
+        }
+        break;
+      }
+      case "wizard": {
+        let pal = "wizard";
+        if (e.hurtTime > 0) pal = "white";
+        else if (e.health < e.maxHealth / 10 && (tick >> 2) & 1) pal = "wizardAngry";
+        else if (e.health < e.maxHealth / 2 && (tick >> 4) % 4 === 0) pal = "wizardAngry";
+        ctx.drawImage(sprite("wizard", pal), x - 8, y - 11);
+        break;
+      }
+      case "spark": {
+        const n = tick + e.life;
+        ctx.drawImage(sprite("spark", "black", !!(n & 2), !!(n & 4)), x - 4, y - 2);
+        ctx.drawImage(sprite("spark", "white", !!(n & 2), !!(n & 4)), x - 4, y - 4);
+        break;
+      }
+      case "furniture":
+        ctx.drawImage(furnitureSprite(e.kind, e.hurtTime > 0), x - 8, y - 9);
+        break;
+      case "item": {
+        if (e.life < 120 && tick & 4) return;
+        ctx.drawImage(icon(e.itemId, true), x - 4, y - 4);
+        ctx.drawImage(icon(e.itemId), x - 4, y - 4 - Math.floor(e.zz || 0));
+        break;
+      }
+      case "text": {
+        const tx = x - e.msg.length * 4;
+        const ty = y - Math.floor(e.zz);
+        drawText(ctx, e.msg, tx + 1, ty + 1, "#000");
+        drawText(ctx, e.msg, tx, ty, e.col);
+        break;
+      }
+      case "smash":
+        ctx.drawImage(sprite("smash", "white"), x - 8, y - 8);
+        break;
     }
   }
 
-  drawEntity(ctx, e, cx, cy, tick) {
-    const x = Math.floor(e.x - cx) - 8;
-    const y = Math.floor(e.y - cy) - 8;
-    let name = "player_down";
-    if (e.type === "player") {
-      const names = ["player_down", "player_up", "player_left", "player_right"];
-      name = names[e.dir] || name;
-    } else if (e.type === "mob") name = e.sprite;
-    else if (e.type === "wizard") name = "wizard";
-    else if (e.type === "spark") name = "spark";
-    else if (e.type === "furniture") name = e.kind;
-    else if (e.type === "item") {
-      const def = itemSprite(e.itemId);
-      name = spritePixels(def) ? def : "wood";
-      const blink = e.life < 120 && (tick & 4);
-      if (blink) return;
+  drawPlayer(ctx, p, x, y, tick) {
+    const pal = p.hurtTime > 0 ? "white" : "player";
+    const body = sprite(`body_${DIR_NAME[p.dir]}_${(p.walk >> 3) & 1}`, pal, p.dir === DIR.LEFT);
+
+    if (p.attackTime > 0 && p.dir === DIR.UP) this.drawSwing(ctx, p, x, y);
+
+    if (p.swimming) {
+      // Only the top half shows, bobbing in a ring of ripples.
+      ctx.drawImage(body, 0, 0, 16, 8, x, y + 4, 16, 8);
+      const f = (tick >> 3) & 1;
+      ctx.fillStyle = C(115);
+      ctx.fillRect(x + 2, y + 12, 12, 1);
+      ctx.fillRect(x + 4, y + 13, 8, 1);
+      ctx.fillStyle = C(555);
+      ctx.fillRect(x + 2 + f * 2, y + 12, 3, 1);
+      ctx.fillRect(x + 11 - f * 2, y + 12, 3, 1);
+    } else {
+      ctx.drawImage(body, x, y);
     }
-    if (e.hurtTime && tick % 2 === 0) {
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(x + 4, y + 4, 8, 10);
-      return;
+
+    const held = p.activeItem();
+    if (held && held.kind === "furniture" && !p.swimming) {
+      // Furniture is carried overhead with both hands up.
+      ctx.fillStyle = pal === "white" ? C(555) : C(532);
+      ctx.fillRect(x + 3, y, 2, 3);
+      ctx.fillRect(x + 11, y, 2, 3);
+      ctx.drawImage(furnitureSprite(held.furniture), x, y - 12);
     }
-    this.blitSprite(ctx, name, x, y);
-    if (e.type === "player" && e.attackTime > 0) {
-      ctx.fillStyle = "#fff8e0";
-      const d = e.dir;
-      if (d === DIR.DOWN) ctx.fillRect(x + 6, y + 14, 4, 6);
-      if (d === DIR.UP) ctx.fillRect(x + 6, y - 2, 4, 6);
-      if (d === DIR.LEFT) ctx.fillRect(x - 2, y + 6, 6, 4);
-      if (d === DIR.RIGHT) ctx.fillRect(x + 12, y + 6, 6, 4);
+
+    if (p.attackTime > 0 && p.dir !== DIR.UP) this.drawSwing(ctx, p, x, y);
+  }
+
+  drawSwing(ctx, p, x, y) {
+    ctx.save();
+    ctx.translate(x + 8, y + 8);
+    ctx.rotate(SLASH_ANGLE[p.dir]);
+    ctx.drawImage(sprite("slash", "white"), -8, -13);
+    ctx.restore();
+    const slot = p.activeSlot();
+    if (slot) {
+      const [ox, oy] = SLASH_ICON[p.dir];
+      ctx.drawImage(icon(slot.id), x + ox, y + oy);
     }
   }
 
-  blitSprite(ctx, name, x, y) {
-    const px = spritePixels(name);
-    if (!px) return;
-    for (let i = 0; i < 256; i++) {
-      const c = px[i];
-      if (!c) continue;
-      ctx.fillStyle = c;
-      ctx.fillRect(x + (i % 16), y + ((i / 16) | 0), 1, 1);
-    }
-  }
-
-  drawFog(ctx, level, cx, cy) {
-    if (level.id === 0 || level.id === 1) return;
-    const t0x = Math.floor(cx / TILE);
-    const t0y = Math.floor(cy / TILE);
-    for (let ty = t0y; ty <= t0y + 9; ty++) {
-      for (let tx = t0x; tx <= t0x + 11; tx++) {
-        if (tx < 0 || ty < 0 || tx >= level.w || ty >= level.h) continue;
-        const L = level.light[level.idx(tx, ty)];
-        if (L >= 8) continue;
-        const a = 1 - L / 8;
-        ctx.fillStyle = `rgba(0,0,0,${a.toFixed(2)})`;
-        ctx.fillRect(tx * TILE - cx, ty * TILE - cy, TILE, TILE);
+  addLight(lx, ly, r) {
+    lx = Math.round(lx);
+    ly = Math.round(ly);
+    const L = this.light;
+    const r2 = r * r;
+    const x0 = Math.max(0, lx - r);
+    const x1 = Math.min(VIEW_W - 1, lx + r);
+    const y0 = Math.max(0, ly - r);
+    const y1 = Math.min(WORLD_H - 1, ly + r);
+    for (let y = y0; y <= y1; y++) {
+      const dy2 = (y - ly) * (y - ly);
+      for (let x = x0; x <= x1; x++) {
+        const d2 = (x - lx) * (x - lx) + dy2;
+        if (d2 >= r2) continue;
+        const br = 255 - ((d2 * 255) / r2) | 0;
+        const i = x + y * VIEW_W;
+        if (L[i] < br) L[i] = br;
       }
     }
+  }
+
+  drawDarkness(ctx, game, level) {
+    const { cx, cy } = this;
+    this.light.fill(0);
+    const p = game.player;
+    const held = p.activeItem();
+    this.addLight(p.x - cx, p.y - cy - 2, held && held.id === "lantern" ? 72 : 40);
+    for (const e of level.entities) {
+      if (e.type === "furniture" && e.kind === "lantern" && !e.removed) this.addLight(e.x - cx, e.y - cy, 64);
+    }
+    const tx1 = Math.floor((cx + VIEW_W) / TILE) + 1;
+    const ty1 = Math.floor((cy + WORLD_H) / TILE) + 1;
+    for (let ty = Math.floor(cy / TILE) - 1; ty <= ty1; ty++) {
+      for (let tx = Math.floor(cx / TILE) - 1; tx <= tx1; tx++) {
+        if (level.get(tx, ty) === Tile.lava) this.addLight(tx * TILE + 8 - cx, ty * TILE + 8 - cy, 28);
+      }
+    }
+    const d = this.lightImg.data;
+    const L = this.light;
+    for (let y = 0; y < WORLD_H; y++) {
+      const row = ((y + cy) & 3) << 2;
+      for (let x = 0; x < VIEW_W; x++) {
+        const i = x + y * VIEW_W;
+        d[i * 4 + 3] = ((L[i] / 10) | 0) <= DITHER[((x + cx) & 3) + row] ? 255 : 0;
+      }
+    }
+    this.lctx.putImageData(this.lightImg, 0, 0);
+    ctx.drawImage(this.lightCanvas, 0, 0);
   }
 
   drawHud(ctx, game) {
     const p = game.player;
-    ctx.fillStyle = "#000000aa";
-    ctx.fillRect(0, 0, VIEW_W, 10);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, WORLD_H, VIEW_W, HUD_H);
     for (let i = 0; i < p.maxHealth; i++) {
-      ctx.fillStyle = i < p.health ? "#d02020" : "#401010";
-      ctx.fillRect(2 + i * 8, 2, 7, 6);
+      ctx.drawImage(sprite("heart", i < p.health ? "heart" : "heartEmpty"), i * 8, WORLD_H);
     }
     for (let i = 0; i < p.maxStamina; i++) {
-      ctx.fillStyle = i < p.stamina ? "#f0d040" : "#404010";
-      ctx.fillRect(82 + i * 8, 2, 7, 6);
+      ctx.drawImage(sprite("bolt", i < p.stamina ? "bolt" : "boltEmpty"), i * 8, WORLD_H + 8);
     }
     const slot = p.activeSlot();
-    if (slot) {
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(2, VIEW_H - 9, 2, 2);
-    }
+    if (slot) drawItem(ctx, slot, 80, WORLD_H);
   }
 
   blit() {

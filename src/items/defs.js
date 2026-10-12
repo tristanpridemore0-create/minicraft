@@ -16,8 +16,8 @@ export const ITEMS = {
   dirt: { id: "dirt", name: "Dirt", kind: "place", place: "dirt", sprite: "dirtItem" },
   stone: { id: "stone", name: "Stone", kind: "resource", sprite: "stone" },
   coal: { id: "coal", name: "Coal", kind: "resource", sprite: "coal" },
-  ironOre: { id: "ironOre", name: "Iron ore", kind: "resource", sprite: "ironOre" },
-  goldOre: { id: "goldOre", name: "Gold ore", kind: "resource", sprite: "goldOre" },
+  ironOre: { id: "ironOre", name: "I.Ore", kind: "resource", sprite: "ironOre" },
+  goldOre: { id: "goldOre", name: "G.Ore", kind: "resource", sprite: "goldOre" },
   gem: { id: "gem", name: "Gem", kind: "resource", sprite: "gem" },
   iron: { id: "iron", name: "Iron", kind: "resource", sprite: "iron" },
   gold: { id: "gold", name: "Gold", kind: "resource", sprite: "gold" },
@@ -32,7 +32,8 @@ export const ITEMS = {
 };
 
 const TIER_NAME = ["Wood", "Rock", "Iron", "Gold", "Gem"];
-const TOOL_NAME = ["shovel", "hoe", "sword", "pick", "axe"];
+const TOOL_ID = ["shovel", "hoe", "sword", "pick", "axe"];
+const TOOL_NAME = ["Shvl", "Hoe", "Swrd", "Pick", "Axe"];
 const TIER_COST = {
   [TIER.WOOD]: { wood: 5 },
   [TIER.ROCK]: { wood: 5, stone: 5 },
@@ -45,7 +46,7 @@ export const TOOL_ITEMS = {};
 
 for (const [tierName, tier] of Object.entries(TIER)) {
   for (const [toolName, tool] of Object.entries(TOOL)) {
-    const id = `${tierName.toLowerCase()}${capitalize(TOOL_NAME[tool])}`;
+    const id = `${tierName.toLowerCase()}${capitalize(TOOL_ID[tool])}`;
     TOOL_ITEMS[id] = {
       id,
       name: `${TIER_NAME[tier]} ${TOOL_NAME[tool]}`,
@@ -82,8 +83,8 @@ export function toolBonus(item, target) {
   return t;
 }
 
-export function canMineOre(item, stamina, maxStamina) {
-  return item && item.tool === TOOL.PICK && stamina >= maxStamina;
+export function canMineOre(item) {
+  return !!item && item.tool === TOOL.PICK;
 }
 
 export function canMineHardRock(item) {

@@ -28,14 +28,16 @@ Gather resources, craft through wood → rock → iron → gold → gem tools, r
 | --- | --- |
 | Move | WASD or arrows |
 | Attack / confirm | Space or C |
-| Inventory / use | E or X |
+| Use / inventory | E or X |
 | Pause | Escape |
 | Drop item (in inventory) | Q |
 
+In menus, up and down move the cursor, attack confirms and E, X or Escape closes. In a chest, left and right switch between the chest and your pack.
+
 Face a tile or furniture and press **use**:
 
-- Empty hand / most items: open inventory
-- Power glove: pick up furniture
+- Most items, nothing in front of you: open inventory
+- Power glove: pick up furniture (hold anything else to open it instead)
 - Furniture in hand: place it
 - Facing a workbench, oven, furnace, or anvil: crafting
 - Facing a chest: transfer items

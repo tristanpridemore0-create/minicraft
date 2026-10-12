@@ -1,8 +1,27 @@
 import { VIEW_W, VIEW_H } from "../constants.js";
-import { drawText, textWidth } from "./font.js";
-import { displayName } from "../items/inventory.js";
+import { C } from "./palette.js";
+import { drawText, drawTextShadow, drawFrame, textWidth, wrapText } from "./font.js";
+import { drawItem } from "./itemdraw.js";
+import { icon } from "./sprites.js";
 import { itemDef } from "../items/defs.js";
 import { recipesFor } from "../crafting/recipes.js";
+
+const PAUSE_ITEMS = ["Resume", "Save", "Controls", "Title"];
+
+const KEY_NAMES = { Escape: "ESC", ArrowUp: "UP", ArrowDown: "DOWN", ArrowLeft: "LEFT", ArrowRight: "RIGHT" };
+function keyName(code) {
+  if (!code) return "";
+  if (KEY_NAMES[code]) return KEY_NAMES[code];
+  return code.replace(/^Key|^Digit/, "").toUpperCase();
+}
+
+function playTime(ticks) {
+  const s = (ticks / 60) | 0;
+  const h = (s / 3600) | 0;
+  const m = ((s / 60) | 0) % 60;
+  const pad = (n) => String(n).padStart(2, "0");
+  return h ? `${h}h ${pad(m)}m` : `${m}m ${pad(s % 60)}s`;
+}
 
 export class UI {
   constructor() {
@@ -11,18 +30,47 @@ export class UI {
     this.seedText = String((Math.random() * 1e9) | 0);
     this.msg = "";
     this.msgTime = 0;
-    this.rebindAction = null;
     this.station = null;
+    this.recipes = [];
+    this.chestWindow = 0;
+    this.chestSel = [0, 0];
+    this.bindsFrom = "title";
   }
 
   toast(text) {
     this.msg = text;
-    this.msgTime = 180;
+    this.msgTime = 240;
   }
 
-  tick(game) {
+  titleItems(game) {
+    return game.hasSave() ? ["Continue", "New world", "Seed", "Controls"] : ["New world", "Seed", "Controls"];
+  }
+
+  openInventory(player) {
+    this.mode = "inventory";
+    this.sel = player.active;
+  }
+
+  openStation(furn, player) {
+    this.station = furn;
+    this.sel = 0;
+    if (furn.kind === "chest") {
+      this.mode = "chest";
+      this.chestWindow = 0;
+      this.chestSel = [0, 0];
+      return;
+    }
+    // Things you can afford right now are listed first.
+    const list = recipesFor(furn.kind);
+    this.recipes = [...list].sort((a, b) => player.inv.canPay(b.cost) - player.inv.canPay(a.cost));
+    this.mode = "craft";
+  }
+
+  // `acceptInput` is false on the frame a menu opens, so the key press that
+  // opened it is not also read as the key press that closes it.
+  tick(game, acceptInput = true) {
     if (this.msgTime > 0) this.msgTime--;
-    if (this.mode === "play") return;
+    if (this.mode === "play" || !acceptInput) return;
     const in_ = game.input;
     if (this.mode === "title") this.tickTitle(game, in_);
     else if (this.mode === "pause") this.tickPause(game, in_);
@@ -34,7 +82,7 @@ export class UI {
   }
 
   tickTitle(game, in_) {
-    const items = game.hasSave() ? ["Continue", "New world", "Seed", "Controls"] : ["New world", "Seed", "Controls"];
+    const items = this.titleItems(game);
     if (in_.just("up")) this.sel = (this.sel + items.length - 1) % items.length;
     if (in_.just("down")) this.sel = (this.sel + 1) % items.length;
     if (in_.just("attack") || in_.just("menu")) {
@@ -44,8 +92,11 @@ export class UI {
       if (it === "Seed") {
         const s = prompt("World seed (number):", this.seedText);
         if (s != null) this.seedText = s;
+        // The browser swallows key-up events while the prompt is open.
+        in_.down.clear();
       }
       if (it === "Controls") {
+        this.bindsFrom = this.mode;
         this.mode = "binds";
         this.sel = 0;
       }
@@ -53,7 +104,7 @@ export class UI {
   }
 
   tickPause(game, in_) {
-    const items = ["Resume", "Save", "Controls", "Title"];
+    const items = PAUSE_ITEMS;
     if (in_.just("up")) this.sel = (this.sel + items.length - 1) % items.length;
     if (in_.just("down")) this.sel = (this.sel + 1) % items.length;
     if (in_.just("pause")) {
@@ -69,62 +120,80 @@ export class UI {
         this.mode = "play";
       }
       if (it === "Controls") {
+        this.bindsFrom = this.mode;
         this.mode = "binds";
         this.sel = 0;
       }
-      if (it === "Title") this.mode = "title";
+      if (it === "Title") {
+        this.mode = "title";
+        this.sel = 0;
+      }
     }
   }
 
   tickInv(game, in_) {
-    const n = game.player.inv.slots.length || 1;
-    if (in_.just("up")) game.player.active = (game.player.active + n - 1) % n;
-    if (in_.just("down")) game.player.active = (game.player.active + 1) % n;
-    if (in_.just("menu") || in_.just("pause")) this.mode = "play";
-    if (in_.just("attack")) this.mode = "play";
+    const p = game.player;
+    const n = p.inv.slots.length;
+    if (in_.just("pause") || !n) {
+      if (in_.just("pause") || in_.just("menu") || in_.just("attack")) this.mode = "play";
+      return;
+    }
+    this.sel = Math.min(this.sel, n - 1);
+    if (in_.just("up")) this.sel = (this.sel + n - 1) % n;
+    if (in_.just("down")) this.sel = (this.sel + 1) % n;
+    if (in_.just("attack") || in_.just("menu")) {
+      p.active = this.sel;
+      this.mode = "play";
+      return;
+    }
     if (in_.just("drop")) {
-      const s = game.player.inv.takeAt(game.player.active);
-      if (s) {
-        game.dropAtPlayer(s.id, 1);
-        if (game.player.active >= game.player.inv.slots.length) game.player.active = Math.max(0, game.player.inv.slots.length - 1);
-      }
+      const s = p.inv.takeAt(this.sel);
+      if (s) game.dropAtPlayer(s.id, 1);
+      const left = p.inv.slots.length;
+      this.sel = Math.max(0, Math.min(this.sel, left - 1));
+      p.active = Math.max(0, Math.min(p.active, left - 1));
     }
   }
 
   tickCraft(game, in_) {
-    const list = recipesFor(this.station.kind === "player" ? "player" : this.station.kind);
-    if (!list.length) {
+    const list = this.recipes;
+    if (!list.length || in_.just("menu") || in_.just("pause")) {
       this.mode = "play";
       return;
     }
     if (in_.just("up")) this.sel = (this.sel + list.length - 1) % list.length;
     if (in_.just("down")) this.sel = (this.sel + 1) % list.length;
-    if (in_.just("menu") || in_.just("pause")) this.mode = "play";
     if (in_.just("attack")) {
       const r = list[this.sel];
       if (game.player.inv.pay(r.cost)) {
         game.player.inv.add(r.result, r.count);
+        game.player.active = Math.min(game.player.active, game.player.inv.slots.length - 1);
         game.audio.craft();
-        this.toast(`Crafted ${itemDef(r.result).name}`);
-      } else this.toast("Need more materials");
+      }
     }
   }
 
   tickChest(game, in_) {
-    const chest = this.station.inv.slots;
-    const player = game.player.inv.slots;
-    const total = chest.length + player.length + 2;
-    if (in_.just("up")) this.sel = (this.sel + total - 1) % Math.max(1, total);
-    if (in_.just("down")) this.sel = (this.sel + 1) % Math.max(1, total);
-    if (in_.just("menu") || in_.just("pause")) this.mode = "play";
-    if (in_.just("attack")) {
-      if (this.sel < chest.length) {
-        const s = this.station.inv.takeAt(this.sel);
-        if (s) game.player.inv.add(s.id, s.count, s.extra);
-      } else if (this.sel >= chest.length + 1 && this.sel < chest.length + 1 + player.length) {
-        const i = this.sel - chest.length - 1;
-        const s = game.player.inv.takeAt(i);
-        if (s) this.station.inv.add(s.id, s.count, s.extra);
+    if (in_.just("menu") || in_.just("pause")) {
+      this.mode = "play";
+      return;
+    }
+    if (in_.just("left")) this.chestWindow = 0;
+    if (in_.just("right")) this.chestWindow = 1;
+    const w = this.chestWindow;
+    const from = w === 0 ? this.station.inv : game.player.inv;
+    const to = w === 0 ? game.player.inv : this.station.inv;
+    const n = from.slots.length;
+    if (n) {
+      this.chestSel[w] = Math.min(this.chestSel[w], n - 1);
+      if (in_.just("up")) this.chestSel[w] = (this.chestSel[w] + n - 1) % n;
+      if (in_.just("down")) this.chestSel[w] = (this.chestSel[w] + 1) % n;
+      if (in_.just("attack")) {
+        const [s] = from.slots.splice(this.chestSel[w], 1);
+        to.add(s.id, s.count, s.extra);
+        this.chestSel[w] = Math.max(0, Math.min(this.chestSel[w], from.slots.length - 1));
+        const p = game.player;
+        p.active = Math.max(0, Math.min(p.active, p.inv.slots.length - 1));
       }
     }
   }
@@ -135,7 +204,7 @@ export class UI {
     if (in_.just("up")) this.sel = (this.sel + actions.length - 1) % actions.length;
     if (in_.just("down")) this.sel = (this.sel + 1) % actions.length;
     if (in_.just("pause") || in_.just("menu")) {
-      this.mode = game.player ? "pause" : "title";
+      this.mode = this.bindsFrom;
       this.sel = 0;
     }
     if (in_.just("attack")) game.input.startRebind(actions[this.sel], 0);
@@ -150,107 +219,147 @@ export class UI {
 
   draw(game, r) {
     const ctx = r.buffer().getContext("2d");
-    if (this.mode === "play") {
-      const slot = game.player.activeSlot();
-      if (slot) drawText(ctx, displayName(slot), 4, VIEW_H - 8, "#ffffff");
-      if (this.msgTime) drawText(ctx, this.msg, 4, VIEW_H - 16, "#ffe680");
-      if (game.player.level.id === 1 && game.levels[1]) {
-        const w = game.player.level.entities.find((e) => e.type === "wizard" && !e.removed);
-        if (w) drawText(ctx, `WIZ ${w.health}`, 100, 12, "#a0d0ff");
-      }
-      return;
-    }
-    ctx.fillStyle = "rgba(0,0,0,0.72)";
-    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
     if (this.mode === "title") this.drawTitle(ctx, game);
-    if (this.mode === "pause") this.drawMenu(ctx, ["Resume", "Save", "Controls", "Title"], "Paused");
-    if (this.mode === "inventory") this.drawInv(ctx, game);
-    if (this.mode === "craft") this.drawCraft(ctx, game);
-    if (this.mode === "chest") this.drawChest(ctx, game);
-    if (this.mode === "binds") this.drawBinds(ctx, game);
-    if (this.mode === "dead") this.drawCenter(ctx, "You died!", "Attack to continue");
-    if (this.mode === "won") this.drawCenter(ctx, "You won!", "The air wizard is gone");
-    if (this.msgTime) drawText(ctx, this.msg, 4, VIEW_H - 8, "#ffe680");
+    else if (this.mode === "pause") this.drawPause(ctx);
+    else if (this.mode === "inventory") this.drawInv(ctx, game);
+    else if (this.mode === "craft") this.drawCraft(ctx, game);
+    else if (this.mode === "chest") this.drawChest(ctx, game);
+    else if (this.mode === "binds") this.drawBinds(ctx, game);
+    else if (this.mode === "dead") this.drawEnd(ctx, game, "You died! Aww!", "Press C to lose");
+    else if (this.mode === "won") this.drawEnd(ctx, game, "You won! Yay!", "Press C to win");
+
+    let top = 2;
+    if (this.mode === "play" && game.player.level.id === 1) {
+      const w = game.player.level.entities.find((e) => e.type === "wizard" && !e.removed);
+      if (w) {
+        // Boss health bar across the top of the sky level.
+        ctx.fillStyle = "#000";
+        ctx.fillRect(29, 2, 102, 5);
+        ctx.fillStyle = C(100);
+        ctx.fillRect(30, 3, 100, 3);
+        ctx.fillStyle = C(500);
+        ctx.fillRect(30, 3, Math.ceil((100 * Math.max(0, w.health)) / w.maxHealth), 3);
+        top = 10;
+      }
+    }
+    if (this.msgTime && (this.mode === "play" || this.mode === "pause")) {
+      wrapText(this.msg, 20).forEach((line, i) => {
+        drawTextShadow(ctx, line, (VIEW_W - textWidth(line)) / 2, top + i * 9, C(550));
+      });
+    }
+  }
+
+  dim(ctx) {
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  }
+
+  // A menu list centred on the screen, with "> <" around the chosen entry.
+  drawOptions(ctx, items, y0) {
+    items.forEach((it, i) => {
+      const on = i === this.sel;
+      const text = on ? `> ${it} <` : it;
+      drawText(ctx, text, (VIEW_W - textWidth(text)) / 2, y0 + i * 10, on ? C(555) : C(222));
+    });
   }
 
   drawTitle(ctx, game) {
-    drawText(ctx, "MINICRAFT", 44, 18, "#7fc238", 2);
-    drawText(ctx, "LD22 RECREATION", 38, 40, "#c0c080");
-    const items = game.hasSave() ? ["Continue", "New world", "Seed", "Controls"] : ["New world", "Seed", "Controls"];
-    items.forEach((it, i) => {
-      const c = i === this.sel ? "#ffffff" : "#888888";
-      drawText(ctx, (i === this.sel ? "> " : "  ") + it, 40, 58 + i * 10, c);
-    });
-    drawText(ctx, `SEED ${this.seedText}`, 20, 108, "#666666");
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    drawText(ctx, "MINICRAFT", 10, 16, C(10), 2);
+    drawText(ctx, "MINICRAFT", 9, 15, C(131), 2);
+    drawText(ctx, "MINICRAFT", 8, 14, C(551), 2);
+    this.drawOptions(ctx, this.titleItems(game), 48);
+    const seed = `Seed ${this.seedText}`.slice(0, 20);
+    drawText(ctx, seed, (VIEW_W - textWidth(seed)) / 2, 92, C(222));
+    drawText(ctx, "(Arrow keys,X and C)", 0, 108, C(111));
   }
 
-  drawMenu(ctx, items, title) {
-    drawText(ctx, title, 50, 24, "#ffffff");
-    items.forEach((it, i) => {
-      const c = i === this.sel ? "#ffffff" : "#888888";
-      drawText(ctx, (i === this.sel ? "> " : "  ") + it, 40, 48 + i * 10, c);
-    });
+  drawPause(ctx) {
+    this.dim(ctx);
+    drawFrame(ctx, "paused", 3, 3, 16, 10);
+    this.drawOptions(ctx, PAUSE_ITEMS, 36);
   }
 
-  drawInv(ctx, game) {
-    drawText(ctx, "INVENTORY", 8, 8, "#ffe680");
-    drawText(ctx, "Attack equip  Q drop", 8, 18, "#888888");
-    const slots = game.player.inv.slots;
-    if (!slots.length) drawText(ctx, "(empty)", 16, 36, "#888");
-    slots.forEach((s, i) => {
-      const c = i === game.player.active ? "#ffffff" : "#a0a0a0";
-      drawText(ctx, (i === game.player.active ? "> " : "  ") + displayName(s), 8, 30 + i * 8, c);
-    });
-  }
-
-  drawCraft(ctx, game) {
-    const list = recipesFor(this.station.kind);
-    drawText(ctx, this.station.kind.toUpperCase(), 8, 8, "#ffe680");
-    const start = Math.max(0, this.sel - 6);
-    list.slice(start, start + 8).forEach((r, j) => {
-      const i = start + j;
-      const can = game.player.inv.canPay(r.cost);
-      const c = i === this.sel ? (can ? "#ffffff" : "#ff8080") : can ? "#a0c0a0" : "#666";
-      const def = itemDef(r.result);
-      drawText(ctx, (i === this.sel ? ">" : " ") + def.name, 4, 20 + j * 10, c);
-    });
-    const r = list[this.sel];
-    if (r) {
-      const cost = Object.entries(r.cost)
-        .map(([k, v]) => `${v} ${itemDef(k).name}`)
-        .join(", ");
-      drawText(ctx, cost, 4, 108, "#c0c080");
+  // Scrolling list of inventory rows inside a frame.
+  drawItemList(ctx, slots, x0, y0, x1, y1, sel, focused) {
+    const rows = y1 - y0 - 1;
+    const top = Math.max(0, Math.min(sel - (rows >> 1), slots.length - rows));
+    for (let i = 0; i < rows && top + i < slots.length; i++) {
+      drawItem(ctx, slots[top + i], (x0 + 1) * 8, (y0 + 1 + i) * 8);
+    }
+    if (focused && slots.length) {
+      const y = (y0 + 1 + sel - top) * 8;
+      drawText(ctx, ">", x0 * 8, y, C(555));
+      drawText(ctx, "<", x1 * 8, y, C(555));
     }
   }
 
+  drawInv(ctx, game) {
+    drawFrame(ctx, "inventory", 1, 1, 12, 11);
+    this.drawItemList(ctx, game.player.inv.slots, 1, 1, 12, 11, this.sel, true);
+  }
+
+  drawCraft(ctx, game) {
+    const inv = game.player.inv;
+    drawFrame(ctx, "have", 12, 1, 19, 3);
+    drawFrame(ctx, "cost", 12, 4, 19, 11);
+    drawFrame(ctx, "crafting", 0, 1, 11, 11);
+    const list = this.recipes;
+    const rows = 9;
+    const top = Math.max(0, Math.min(this.sel - (rows >> 1), list.length - rows));
+    for (let i = 0; i < rows && top + i < list.length; i++) {
+      const r = list[top + i];
+      const y = (2 + i) * 8;
+      ctx.drawImage(icon(r.result), 8, y);
+      drawText(ctx, itemDef(r.result).name, 16, y, inv.canPay(r.cost) ? C(555) : C(222));
+    }
+    const y = (2 + this.sel - top) * 8;
+    drawText(ctx, ">", 0, y, C(555));
+    drawText(ctx, "<", 11 * 8, y, C(555));
+
+    const r = list[this.sel];
+    if (!r) return;
+    ctx.drawImage(icon(r.result), 13 * 8, 2 * 8);
+    drawText(ctx, String(Math.min(999, inv.count(r.result))), 14 * 8, 2 * 8, C(555));
+    Object.entries(r.cost).forEach(([id, need], i) => {
+      const have = inv.count(id);
+      const yy = (5 + i) * 8;
+      ctx.drawImage(icon(id), 13 * 8, yy);
+      drawText(ctx, `${need}/${Math.min(99, have)}`, 14 * 8, yy, have >= need ? C(555) : C(222));
+    });
+  }
+
+  // Chest on the left, your pack on the right; the one in use slides into view.
   drawChest(ctx, game) {
-    drawText(ctx, "CHEST", 8, 6, "#ffe680");
-    let y = 16;
-    this.station.inv.slots.forEach((s, i) => {
-      drawText(ctx, (this.sel === i ? ">" : " ") + displayName(s), 4, y, this.sel === i ? "#fff" : "#aaa");
-      y += 8;
-    });
-    y += 4;
-    drawText(ctx, "YOU", 8, y, "#ffe680");
-    y += 10;
-    const base = this.station.inv.slots.length + 1;
-    game.player.inv.slots.forEach((s, i) => {
-      drawText(ctx, (this.sel === base + i ? ">" : " ") + displayName(s), 4, y, this.sel === base + i ? "#fff" : "#aaa");
-      y += 8;
-    });
+    const w = this.chestWindow;
+    ctx.save();
+    if (w === 1) ctx.translate(-48, 0);
+    drawFrame(ctx, "chest", 1, 1, 12, 11);
+    this.drawItemList(ctx, this.station.inv.slots, 1, 1, 12, 11, this.chestSel[0], w === 0);
+    drawFrame(ctx, "inventory", 13, 1, 24, 11);
+    this.drawItemList(ctx, game.player.inv.slots, 13, 1, 24, 11, this.chestSel[1], w === 1);
+    ctx.restore();
   }
 
   drawBinds(ctx, game) {
-    drawText(ctx, "CONTROLS", 8, 8, "#ffe680");
-    drawText(ctx, game.input.waiting ? "Press a key..." : "Attack to rebind", 8, 18, "#888");
-    Object.entries(game.input.binds).forEach(([k, v], i) => {
-      const c = i === this.sel ? "#fff" : "#aaa";
-      drawText(ctx, (i === this.sel ? ">" : " ") + k + " " + v[0], 4, 30 + i * 9, c);
+    this.dim(ctx);
+    drawFrame(ctx, "controls", 0, 0, 19, 12);
+    Object.entries(game.input.binds).forEach(([action, keys], i) => {
+      const on = i === this.sel;
+      const y = (2 + i) * 8;
+      if (on) drawText(ctx, ">", 8, y, C(555));
+      drawText(ctx, action, 16, y, on ? C(555) : C(333));
+      drawText(ctx, keys.map(keyName).join("/"), 80, y, on ? C(550) : C(333));
     });
+    drawText(ctx, game.input.waiting ? "Press a key..." : "Attack: change", 16, 11 * 8, C(444));
   }
 
-  drawCenter(ctx, a, b) {
-    drawText(ctx, a, (VIEW_W - textWidth(a)) / 2, 48, "#ff8080");
-    drawText(ctx, b, (VIEW_W - textWidth(b)) / 2, 68, "#cccccc");
+  drawEnd(ctx, game, line, hint) {
+    drawFrame(ctx, "", 1, 3, 18, 9);
+    drawText(ctx, line, 16, 32, C(555));
+    drawText(ctx, "Time:", 16, 48, C(555));
+    drawText(ctx, playTime(game.tick), 64, 48, C(550));
+    drawText(ctx, hint, 16, 64, C(333));
   }
 }

@@ -6,4 +6,6 @@ canvas.width = SCREEN_W;
 canvas.height = SCREEN_H;
 
 const game = new Game(canvas);
+// Handy for poking at the game from the browser console.
+window.game = game;
 game.start();

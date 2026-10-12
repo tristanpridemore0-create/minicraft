@@ -61,14 +61,16 @@ export class Entity {
   bump() {}
   touched() {}
 
-  hurt(amt, srcX, srcY) {
-    if (this.hurtTime > 0) return;
+  // Returns true if the hit landed (false while still flashing from the last one).
+  hurt(amt, srcX, srcY, game) {
+    if (this.hurtTime > 0) return false;
     this.health -= amt;
     this.hurtTime = 10;
     const dx = Math.sign(this.x - srcX) || 0;
     const dy = Math.sign(this.y - srcY) || 0;
     this.knock(dx * 4, dy * 4);
-    if (this.health <= 0) this.die();
+    if (this.health <= 0) this.die(game);
+    return true;
   }
 
   knock(xa, ya) {

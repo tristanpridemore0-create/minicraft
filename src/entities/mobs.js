@@ -67,7 +67,7 @@ export class Mob extends Entity {
         this.xa = (Math.random() * 3 - 1) | 0;
         this.ya = (Math.random() * 3 - 1) | 0;
       }
-      if (this.level.tick % 2 === 0) this.move(this.xa, this.ya);
+      if (this.level.tick % 2 === 0 && this.move(this.xa, this.ya)) this.walk += 2;
     }
     if (this.ya > 0) this.dir = DIR.DOWN;
     else if (this.ya < 0) this.dir = DIR.UP;
@@ -148,6 +148,7 @@ export class AirWizard extends Entity {
 
   die(game) {
     super.die();
+    if (!game) return;
     game.won = true;
     game.audio.win();
   }
