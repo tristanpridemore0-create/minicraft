@@ -1,5 +1,7 @@
 import { MAP, TILE } from "../constants.js";
-import { Tile, solid, liquid, holeLike, walkable, floorOf, tileHp, harvestKind, lightEmit, contactDamage } from "./tiles.js";
+import { Tile, solid, liquid, holeLike, walkable, floorOf, tileHp, harvestKind } from "./tiles.js";
+import { TextParticle, SmashParticle } from "../entities/particles.js";
+import { C } from "../render/palette.js";
 import { TOOL } from "../constants.js";
 import { canMineHardRock, canMineOre, toolBonus, itemDef } from "../items/defs.js";
 
@@ -11,7 +13,6 @@ export class Level {
     this.tiles = data.tiles;
     this.hurt = new Int16Array(MAP * MAP);
     this.entities = [];
-    this.light = new Uint8Array(MAP * MAP);
     this.tick = 0;
   }
 
@@ -60,47 +61,13 @@ export class Level {
     return this.entities.filter((e) => !e.removed && e !== except && e.x + e.xr > x0 && e.x - e.xr < x1 && e.y + e.yr > y0 && e.y - e.yr < y1);
   }
 
-  updateLight(player, lantern) {
-    this.light.fill(this.id === 0 || this.id === 1 ? 8 : 0);
-    if (this.id === 0 || this.id === 1) {
-      for (let i = 0; i < this.light.length; i++) this.light[i] = 8;
-    }
-    const lights = [];
-    if (player) lights.push({ x: Math.floor(player.x / TILE), y: Math.floor(player.y / TILE), r: lantern ? 8 : 3 });
-    for (const e of this.entities) {
-      if (e.type === "furniture" && e.kind === "lantern") {
-        lights.push({ x: Math.floor(e.x / TILE), y: Math.floor(e.y / TILE), r: 7 });
-      }
-    }
-    for (let y = 0; y < this.h; y++) {
-      for (let x = 0; x < this.w; x++) {
-        const em = lightEmit(this.get(x, y));
-        if (em) lights.push({ x, y, r: em });
-      }
-    }
-    for (const L of lights) {
-      const r = L.r;
-      for (let dy = -r; dy <= r; dy++) {
-        for (let dx = -r; dx <= r; dx++) {
-          const x = L.x + dx;
-          const y = L.y + dy;
-          if (x < 0 || y < 0 || x >= this.w || y >= this.h) continue;
-          const d = Math.max(Math.abs(dx), Math.abs(dy));
-          const v = Math.max(0, r - d + 1);
-          const i = this.idx(x, y);
-          if (v > this.light[i]) this.light[i] = v;
-        }
-      }
-    }
-  }
-
   tryHitTile(tx, ty, player, drops) {
     const id = this.get(tx, ty);
     if (id === Tile.stairsDown || id === Tile.stairsUp) return false;
     const item = player.activeItem();
     const kind = harvestKind(id);
     if (id === Tile.hardRock && !canMineHardRock(item)) return false;
-    if (kind === "ore" && !canMineOre(item, player.fullSwing ? player.maxStamina : 0, player.maxStamina)) return false;
+    if (kind === "ore" && !canMineOre(item)) return false;
 
     if (id === Tile.grass && item && item.tool === TOOL.HOE) {
       this.set(tx, ty, Tile.farm);
@@ -144,6 +111,8 @@ export class Level {
     let dmg = 1 + toolBonus(item, kind);
     if (player.stamina >= player.maxStamina - 1) dmg += 1;
     this.hurt[this.idx(tx, ty)] += dmg;
+    this.add(new SmashParticle(tx * TILE + 8, ty * TILE + 8));
+    this.add(new TextParticle(dmg, tx * TILE + 8, ty * TILE + 8, C(500)));
 
     if (kind === "tree" && Math.random() < 0.08) drops.push({ id: "apple", n: 1 });
     if (kind === "ore" && Math.random() < 0.35) {
@@ -237,23 +206,9 @@ export class Level {
     }
   }
 
-  contactDmgAt(px, py) {
+  liquidAt(px, py) {
     const t = this.tileAtPixel(px, py);
-    let d = contactDamage(t);
-    if (t === Tile.water) return { water: true, lava: false, dmg: 0 };
-    if (t === Tile.lava) return { water: false, lava: true, dmg: d };
-    const fx = Math.floor(px / TILE);
-    const fy = Math.floor(py / TILE);
-    for (const [dx, dy] of [
-      [0, 0],
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ]) {
-      d = Math.max(d, contactDamage(this.get(fx + dx, fy + dy)));
-    }
-    return { water: false, lava: false, dmg: d };
+    return { water: t === Tile.water, lava: t === Tile.lava };
   }
 }
 

@@ -1,185 +1,472 @@
-const SIZE = 16;
-const keys = [];
-const map = new Map();
+import { C } from "./palette.js";
+import { itemDef } from "../items/defs.js";
+import { TOOL } from "../constants.js";
 
-function pal(p, x, y, c) {
-  if (c == null) return;
-  p[y * SIZE + x] = c;
+// Every sprite is a grid of palette letters ("." is see-through). The same
+// drawing is reused with different palettes, e.g. the four zombie colours.
+
+const BODY_DOWN_A = [
+  "................",
+  ".....oooooo.....",
+  "....oooooooo....",
+  "....osssssso....",
+  "....sosssoss....",
+  "....ssssssss....",
+  ".....ssssss.....",
+  "....cccccccc....",
+  "...cccccccccc...",
+  "...sccccccccs...",
+  "...sccccccccs...",
+  "....cccccccc....",
+  "....oooooooo....",
+  "....ooo..ooo....",
+  "....ooo.........",
+  "................",
+];
+const BODY_UP_A = [
+  "................",
+  ".....oooooo.....",
+  "....oooooooo....",
+  "....oooooooo....",
+  "....oooooooo....",
+  "....soooooos....",
+  ".....ssssss.....",
+  "....cccccccc....",
+  "...cccccccccc...",
+  "...sccccccccs...",
+  "...sccccccccs...",
+  "....cccccccc....",
+  "....oooooooo....",
+  "....ooo..ooo....",
+  ".........ooo....",
+  "................",
+];
+const BODY_SIDE_A = [
+  "................",
+  ".....oooooo.....",
+  "....oooooooo....",
+  "....oooossss....",
+  "....ooosssos....",
+  "....oossssss....",
+  ".....osssss.....",
+  ".....cccccc.....",
+  "....cccccccc....",
+  "....cccsscc.....",
+  "....cccsscc.....",
+  ".....cccccc.....",
+  ".....oooooo.....",
+  ".....ooooo......",
+  ".....oo.oo......",
+  "................",
+];
+const BODY_SIDE_B = [...BODY_SIDE_A.slice(0, 12), ".....oooooo.....", "....ooo..ooo....", "...ooo....ooo...", "................"];
+
+// Second walking frame: the other foot is forward.
+function otherFoot(rows) {
+  const out = [...rows];
+  out[14] = [...rows[14]].reverse().join("");
+  return out;
 }
 
-function box(p, x, y, w, h, c) {
-  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) pal(p, x + i, y + j, c);
+// Zombies share the player's body but are bald. `eyes` lists the columns on
+// row 4 that stay dark once the hair is gone.
+function zombify(rows, eyes = []) {
+  return rows.map((r, i) => {
+    if (i < 1 || i > 6) return r;
+    const bald = [...r.replaceAll("o", "s")];
+    if (i === 4) for (const col of eyes) bald[col] = "o";
+    return bald.join("");
+  });
 }
 
-function make(name, draw) {
-  const p = new Array(SIZE * SIZE).fill(null);
-  draw(p);
-  keys.push(name);
-  map.set(name, p);
-}
+const SLIME_REST = [
+  "................",
+  "................",
+  "................",
+  "................",
+  "................",
+  ".....oooooo.....",
+  "...oobbbbbboo...",
+  "..obbbbbbbbbbo..",
+  "..obeebbbbeebo..",
+  ".obbeobbbboebbo.",
+  ".obbbbbbbbbbbbo.",
+  ".obbbbbbbbbbbbo.",
+  ".obbbbbbbbbbbbo.",
+  "..obbbbbbbbbbo..",
+  "...oooooooooo...",
+  "................",
+];
+const SLIME_JUMP = [
+  "................",
+  ".....oooooo.....",
+  "....obbbbbbo....",
+  "...obbbbbbbbo...",
+  "...obeebbeebo...",
+  "..obbeobboebbo..",
+  "..obbbbbbbbbbo..",
+  "..obbbbbbbbbbo..",
+  "..obbbbbbbbbbo..",
+  "..obbbbbbbbbbo..",
+  "...obbbbbbbbo...",
+  "...obbbbbbbbo...",
+  "....oooooooo....",
+  "................",
+  "................",
+  "................",
+];
 
-function blob(p, cx, cy, r, c) {
-  for (let y = 0; y < SIZE; y++) {
-    for (let x = 0; x < SIZE; x++) {
-      const dx = x - cx;
-      const dy = y - cy;
-      if (dx * dx + dy * dy <= r * r) pal(p, x, y, c);
+const WIZARD = [
+  ".......oo.......",
+  "......orro......",
+  ".....orrrro.....",
+  "....orrrrrro....",
+  "...oooooooooo...",
+  "....osssssso....",
+  "....sosssoss....",
+  "....wwwwwwww....",
+  "...rwwwwwwwwr...",
+  "..rrrwwwwwwrrr..",
+  "..rrrrwwwwrrrr..",
+  "..srrrrwwrrrrs..",
+  "...rrrrrrrrrr...",
+  "...rrrrrrrrrr...",
+  "..orrrrrrrrrro..",
+  "..oooooooooooo..",
+];
+
+const SPARK = ["...w....", ".w.w.w..", "..www...", "wwwwwww.", "..www...", ".w.w.w..", "...w....", "........"];
+
+const SMASH = [
+  "................",
+  ".w.....ww.....w.",
+  "..w....ww....w..",
+  "...w........w...",
+  "....w......w....",
+  "................",
+  "................",
+  ".ww..........ww.",
+  ".ww..........ww.",
+  "................",
+  "................",
+  "....w......w....",
+  "...w........w...",
+  "..w....ww....w..",
+  ".w.....ww.....w.",
+  "................",
+];
+
+// The arc drawn in front of the player while swinging (this one points up).
+const SLASH = ["....wwwwwwww....", "..ww........ww..", ".w............w.", "w..............w"];
+
+const WORKBENCH = [
+  "................",
+  "................",
+  "................",
+  ".oooooooooooooo.",
+  ".ollllllllllllo.",
+  ".ollooolllllllo.",
+  ".ollllllllllllo.",
+  ".oooooooooooooo.",
+  ".obbbbbbbbbbbbo.",
+  ".obbbbbbbbbbbbo.",
+  ".oooooooooooooo.",
+  ".obbo......obbo.",
+  ".obbo......obbo.",
+  ".obbo......obbo.",
+  ".oooo......oooo.",
+  "................",
+];
+const CHEST = [
+  "................",
+  "................",
+  "................",
+  "..oooooooooooo..",
+  ".olllllllllllbo.",
+  ".olbbbbbbbbbbbo.",
+  ".olbbbbbbbbbbbo.",
+  ".oooooooooooooo.",
+  ".ollllloyylllbo.",
+  ".olbbbboyybbbbo.",
+  ".olbbbbboobbbbo.",
+  ".olbbbbbbbbbbbo.",
+  ".olbbbbbbbbbbbo.",
+  ".oooooooooooooo.",
+  "................",
+  "................",
+];
+const OVEN = [
+  "................",
+  "................",
+  "..oooooooooooo..",
+  ".oggggggggggggo.",
+  ".oggggggggggggo.",
+  ".ogddddddddddgo.",
+  ".oggggggggggggo.",
+  ".oggookkkkooggo.",
+  ".oggokkkkkkoggo.",
+  ".oggokkkkkkoggo.",
+  ".oggokkkkkkoggo.",
+  ".oggooooooooggo.",
+  ".oggggggggggggo.",
+  ".oooooooooooooo.",
+  "................",
+  "................",
+];
+const FURNACE = [
+  "................",
+  "................",
+  "..oooooooooooo..",
+  ".oggggggggggggo.",
+  ".ogddggggggddgo.",
+  ".oggggggggggggo.",
+  ".oggooooooooggo.",
+  ".oggokkrrkkoggo.",
+  ".oggokryyrkoggo.",
+  ".oggorryyrroggo.",
+  ".oggooooooooggo.",
+  ".oggggggggggggo.",
+  ".ogddggggggddgo.",
+  ".oooooooooooooo.",
+  "................",
+  "................",
+];
+const ANVIL = [
+  "................",
+  "................",
+  "................",
+  "................",
+  ".oooooooooooo...",
+  ".ohhhhhhhhhhmoo.",
+  ".ommmmmmmmmmmmo.",
+  "..oommmmmmmmoo..",
+  "....ommmmmmo....",
+  ".....ommmmo.....",
+  ".....ommmmo.....",
+  "....ommmmmmo....",
+  "...ommmmmmmmo...",
+  "...oddddddddo...",
+  "...oooooooooo...",
+  "................",
+];
+const LANTERN = [
+  "................",
+  "................",
+  "................",
+  "......oooo......",
+  ".....ommmmo.....",
+  "....oooooooo....",
+  "....oyyyyyyo....",
+  "....oywwyyyo....",
+  "....oywwyyyo....",
+  "....oyyyyyyo....",
+  "....oyyyyyyo....",
+  "....oooooooo....",
+  ".....ommmmo.....",
+  "....oooooooo....",
+  "................",
+  "................",
+];
+
+const HEART = ["........", ".aa.aa..", "abbabba.", "abcbbba.", "abbbbba.", ".abbba..", "..aba...", "...a...."];
+const BOLT = ["....aa..", "...aba..", "..abba..", ".abbbaaa", "aaabbba.", "..abba..", "..aba...", "..aa...."];
+
+// 8x8 item icons.
+const ICON_SHAPES = {
+  chunk: ["........", "..aaaa..", ".abbcba.", "abbcbbba", "abbbbbca", "abcbbbba", ".aaaaaa.", "........"],
+  ingot: ["........", "...aaaa.", "..acccba", ".acccbba", "acccbba.", "abbbba..", ".aaaa...", "........"],
+  gem: ["........", "..aaaa..", ".acccba.", "acccbbba", ".abbbba.", "..abba..", "...aa...", "........"],
+  log: ["........", ".aaaaaa.", "abbbbbca", "abcbbbba", "abbbbcba", "abbcbbba", ".aaaaaa.", "........"],
+  apple: ["....a...", "...a....", ".bbabb..", "bbcbbbb.", "bcbbbbb.", "bbbbbbb.", ".bbbbb..", "..b.b..."],
+  bread: ["........", "..aaaa..", ".abbbba.", "abcbcbba", "abbbbbba", "abbbbbba", ".aaaaaa.", "........"],
+  acorn: ["...a....", "..aaaa..", ".aaaaaa.", ".bbbbbb.", ".bcbbbb.", ".bbbbbb.", "..bbbb..", "...bb..."],
+  flower: ["..bb....", ".bccb...", ".bccb...", "..bb.a..", "...aa...", "...a....", "..aa....", "...a...."],
+  cactus: ["...aa...", "...ab.a.", ".a.ab.a.", ".a.abaa.", ".aaab...", "...ab...", "...ab...", "...ab..."],
+  seeds: ["........", ".a...b..", "b...a...", "...b...a", ".a...b..", "b...a...", "...b....", "........"],
+  wheat: ["..a.a.a.", "..a.a.a.", "..a.a.a.", "...aaa..", "...bbb..", "...aaa..", "..a.a.a.", ".a..a..a"],
+  ball: ["........", "..aaaa..", ".abbbba.", ".abcbba.", ".abbbba.", ".abbbba.", "..aaaa..", "........"],
+  cloth: ["........", ".aaaaaa.", ".abbbba.", ".acccca.", ".abbbba.", ".acccca.", ".aaaaaa.", "........"],
+  pile: ["........", "........", "...bb...", "..bcbb..", ".bbbbcb.", "bbcbbbbb", "aaaaaaaa", "........"],
+  glass: [".aaaaaa.", "abbcbbba", "abcbbbba", "abbbbbba", "abbbbcba", "abbbcbba", "abbbbbba", ".aaaaaa."],
+  glove: ["..aaaa..", ".abbbba.", ".abbbbaa", ".abbbbba", ".abbbbba", "..abbba.", "..abbba.", "..aaaaa."],
+  workbench: ["........", "aaaaaaaa", "abbbbbba", "aaaaaaaa", ".ac..ca.", ".ac..ca.", ".aa..aa.", "........"],
+  chest: ["........", ".aaaaaa.", "abbbbbba", "aaaccaaa", "abbccbba", "abbbbbba", "aaaaaaaa", "........"],
+  stove: ["........", ".aaaaaa.", "abbbbbba", "abcddcba", "abcddcba", "abbbbbba", "aaaaaaaa", "........"],
+  anvil: ["........", "aaaaaaa.", "abbbbbba", ".aabbaa.", "..abba..", ".abbbba.", ".aaaaaa.", "........"],
+  lantern: ["..aaaa..", "...aa...", "..aaaa..", "..abba..", "..abba..", "..abba..", "..aaaa..", "........"],
+  shovel: [".....mm.", "....mmmm", "....mmmm", "...hmmm.", "..hh....", ".hh.....", "hh......", "........"],
+  hoe: ["..mmmmh.", "..m..hh.", "....hh..", "...hh...", "..hh....", ".hh.....", "hh......", "........"],
+  sword: ["......mm", ".....mmm", "....mmm.", "...mmm..", "h.mmm...", ".hhm....", ".hh.....", "h..h...."],
+  pick: ["..mmmm..", ".m...hm.", "....hh.m", "...hh..m", "..hh....", ".hh.....", "hh......", "........"],
+  axe: ["....mm..", "...mmmm.", "..mmmhmm", "...mhhm.", "...hh...", "..hh....", ".hh.....", "hh......"],
+};
+
+const abc = (a, b, c, d) => ({ a: C(a), b: C(b), c: C(c), d: d === undefined ? undefined : C(d) });
+
+const ICONS = {
+  powerGlove: ["glove", abc(100, 430, 430)],
+  apple: ["apple", abc(110, 500, 533)],
+  bread: ["bread", abc(110, 330, 550)],
+  wood: ["log", abc(200, 531, 430)],
+  acorn: ["acorn", abc(210, 531, 553)],
+  cactus: ["cactus", abc(30, 50, 50)],
+  flower: ["flower", abc(20, 555, 440)],
+  seeds: ["seeds", abc(40, 252, 0)],
+  wheat: ["wheat", abc(440, 220, 0)],
+  slime: ["ball", abc(10, 30, 151)],
+  cloth: ["cloth", abc(222, 444, 555)],
+  sand: ["pile", abc(440, 550, 553)],
+  dirt: ["pile", abc(100, 322, 433)],
+  cloud: ["pile", abc(222, 555, 444)],
+  stone: ["chunk", abc(111, 333, 555)],
+  coal: ["chunk", abc(0, 111, 222)],
+  ironOre: ["chunk", abc(100, 322, 544)],
+  goldOre: ["chunk", abc(110, 440, 553)],
+  gem: ["gem", abc(101, 404, 545)],
+  iron: ["ingot", abc(100, 333, 555)],
+  gold: ["ingot", abc(110, 440, 553)],
+  glass: ["glass", abc(555, 335, 555)],
+  workbench: ["workbench", abc(100, 431, 321)],
+  chest: ["chest", abc(100, 431, 550)],
+  oven: ["stove", abc(0, 332, 111, 111)],
+  furnace: ["stove", abc(0, 222, 500, 550)],
+  anvil: ["anvil", abc(0, 444, 0)],
+  lantern: ["lantern", abc(111, 550, 0)],
+};
+
+const TOOL_SHAPE = { [TOOL.SHOVEL]: "shovel", [TOOL.HOE]: "hoe", [TOOL.SWORD]: "sword", [TOOL.PICK]: "pick", [TOOL.AXE]: "axe" };
+const TIER_HEAD = [431, 333, 555, 550, 55];
+
+const PALETTES = {
+  player: { o: C(100), s: C(532), c: C(220) },
+  zombie_g: { o: C(10), s: C(252), c: C(50) },
+  zombie_r: { o: C(100), s: C(522), c: C(50) },
+  zombie_w: { o: C(111), s: C(444), c: C(50) },
+  zombie_b: { o: C(0), s: C(111), c: C(20) },
+  slime_g: { o: C(10), b: C(252), e: C(555) },
+  slime_r: { o: C(100), b: C(522), e: C(555) },
+  slime_w: { o: C(111), b: C(444), e: C(555) },
+  slime_b: { o: C(0), b: C(111), e: C(224) },
+  wizard: { o: C(100), r: C(500), w: C(555), s: C(532) },
+  wizardAngry: { o: C(100), r: C(555), w: C(500), s: C(532) },
+  white: { w: C(555) },
+  black: { w: "#000" },
+  wood: { o: C(100), l: C(431), b: C(321), y: C(550) },
+  stone: { o: C(0), g: C(332), d: C(221), k: C(111), r: C(500), y: C(550) },
+  furnace: { o: C(0), g: C(222), d: C(111), k: C(111), r: C(500), y: C(550) },
+  metal: { o: C(0), m: C(444), h: C(555), d: C(222) },
+  lantern: { o: C(0), m: C(222), y: C(550), w: C(555) },
+  heart: { a: C(200), b: C(500), c: C(533) },
+  heartEmpty: { a: C(100), b: C(0), c: C(0) },
+  bolt: { a: C(220), b: C(550) },
+  boltEmpty: { a: C(110), b: C(0) },
+};
+
+const SPRITES = {
+  body_down_0: BODY_DOWN_A,
+  body_down_1: otherFoot(BODY_DOWN_A),
+  body_up_0: BODY_UP_A,
+  body_up_1: otherFoot(BODY_UP_A),
+  body_side_0: BODY_SIDE_A,
+  body_side_1: BODY_SIDE_B,
+  zombie_down_0: zombify(BODY_DOWN_A, [5, 9]),
+  zombie_down_1: zombify(otherFoot(BODY_DOWN_A), [5, 9]),
+  zombie_up_0: zombify(BODY_UP_A),
+  zombie_up_1: zombify(otherFoot(BODY_UP_A)),
+  zombie_side_0: zombify(BODY_SIDE_A, [10]),
+  zombie_side_1: zombify(BODY_SIDE_B, [10]),
+  slime_0: SLIME_REST,
+  slime_1: SLIME_JUMP,
+  wizard: WIZARD,
+  spark: SPARK,
+  smash: SMASH,
+  slash: SLASH,
+  workbench: WORKBENCH,
+  chest: CHEST,
+  oven: OVEN,
+  furnace: FURNACE,
+  anvil: ANVIL,
+  lantern: LANTERN,
+  heart: HEART,
+  bolt: BOLT,
+};
+
+const FURNITURE_PAL = { workbench: "wood", chest: "wood", oven: "stone", furnace: "furnace", anvil: "metal", lantern: "lantern" };
+
+// Throws if any drawing has a ragged row or uses a letter its palette lacks.
+export function validateSprites() {
+  const check = (name, rows) => {
+    const w = rows[0].length;
+    rows.forEach((r, i) => {
+      if (r.length !== w) throw new Error(`sprite ${name} row ${i} is ${r.length} wide, expected ${w}`);
+    });
+  };
+  for (const [name, rows] of Object.entries(SPRITES)) check(name, rows);
+  for (const [name, rows] of Object.entries(ICON_SHAPES)) check(`icon ${name}`, rows);
+  for (const [id, [shape, pal]] of Object.entries(ICONS)) {
+    if (!ICON_SHAPES[shape]) throw new Error(`icon ${id} uses unknown shape ${shape}`);
+    for (const ch of ICON_SHAPES[shape].join("")) {
+      if (ch !== "." && !pal[ch]) throw new Error(`icon ${id} has no colour for "${ch}"`);
     }
   }
+  return Object.keys(SPRITES).length + Object.keys(ICONS).length;
 }
 
-export function buildSprites() {
-  if (map.size) return { keys, map };
+const cache = new Map();
 
-  make("player_down", (p) => {
-    box(p, 5, 2, 6, 5, "#e0b080");
-    box(p, 4, 7, 8, 6, "#6b3a18");
-    pal(p, 6, 4, "#202020");
-    pal(p, 9, 4, "#202020");
-    box(p, 4, 13, 3, 2, "#3a220c");
-    box(p, 9, 13, 3, 2, "#3a220c");
-  });
-  make("player_up", (p) => {
-    box(p, 5, 2, 6, 5, "#e0b080");
-    box(p, 4, 7, 8, 6, "#6b3a18");
-    box(p, 4, 13, 3, 2, "#3a220c");
-    box(p, 9, 13, 3, 2, "#3a220c");
-  });
-  make("player_left", (p) => {
-    box(p, 5, 2, 6, 5, "#e0b080");
-    box(p, 4, 7, 8, 6, "#6b3a18");
-    pal(p, 6, 4, "#202020");
-    box(p, 4, 13, 3, 2, "#3a220c");
-    box(p, 9, 13, 3, 2, "#3a220c");
-  });
-  make("player_right", (p) => {
-    box(p, 5, 2, 6, 5, "#e0b080");
-    box(p, 4, 7, 8, 6, "#6b3a18");
-    pal(p, 9, 4, "#202020");
-    box(p, 4, 13, 3, 2, "#3a220c");
-    box(p, 9, 13, 3, 2, "#3a220c");
-  });
-
-  make("slime_g", (p) => {
-    blob(p, 8, 10, 6, "#4caf20");
-    pal(p, 6, 8, "#102010");
-    pal(p, 10, 8, "#102010");
-  });
-  make("slime_r", (p) => {
-    blob(p, 8, 10, 6, "#c03020");
-    pal(p, 6, 8, "#200808");
-    pal(p, 10, 8, "#200808");
-  });
-  make("slime_w", (p) => {
-    blob(p, 8, 10, 6, "#d8d8e8");
-    pal(p, 6, 8, "#303040");
-    pal(p, 10, 8, "#303040");
-  });
-  make("slime_b", (p) => {
-    blob(p, 8, 10, 6, "#303038");
-    pal(p, 6, 8, "#e8e8e8");
-    pal(p, 10, 8, "#e8e8e8");
-  });
-
-  const zombie = (name, shirt, pants) =>
-    make(name, (p) => {
-      box(p, 5, 1, 6, 5, "#7cb050");
-      box(p, 4, 6, 8, 6, shirt);
-      box(p, 5, 12, 2, 3, pants);
-      box(p, 9, 12, 2, 3, pants);
-      pal(p, 6, 3, "#102010");
-      pal(p, 9, 3, "#102010");
-    });
-  zombie("zombie_g", "#2f6b20", "#243018");
-  zombie("zombie_r", "#8a2020", "#401010");
-  zombie("zombie_w", "#d0d0dc", "#686878");
-  zombie("zombie_b", "#202028", "#101014");
-
-  make("wizard", (p) => {
-    box(p, 5, 1, 6, 5, "#e8e0c0");
-    box(p, 3, 6, 10, 8, "#4060c0");
-    box(p, 6, 0, 4, 3, "#304090");
-    pal(p, 6, 3, "#202040");
-    pal(p, 9, 3, "#202040");
-  });
-
-  make("spark", (p) => {
-    blob(p, 8, 8, 3, "#c0e8ff");
-    blob(p, 8, 8, 1, "#ffffff");
-  });
-
-  const itemBox = (name, c, inner) =>
-    make(name, (p) => {
-      box(p, 4, 4, 8, 8, c);
-      if (inner) box(p, 6, 6, 4, 4, inner);
-    });
-
-  itemBox("wood", "#8a5a28", "#c09050");
-  itemBox("stone", "#808080", "#b0b0b0");
-  itemBox("dirtItem", "#6b4420", "#8a5a30");
-  itemBox("sandItem", "#d8c060", "#f0e090");
-  itemBox("coal", "#202020", "#505050");
-  itemBox("ironOre", "#8a6040", "#c0a070");
-  itemBox("goldOre", "#c0a020", "#f0d040");
-  itemBox("gem", "#20a0c0", "#80e0ff");
-  itemBox("iron", "#b0b8c0", "#e8eef0");
-  itemBox("gold", "#e0c020", "#fff070");
-  itemBox("glass", "#a0d0e0", "#e8ffff");
-  itemBox("slime", "#40b030", "#80e060");
-  itemBox("cloth", "#b0b0c0", "#e0e0e8");
-  itemBox("wheat", "#c8b040", "#efe070");
-  itemBox("seeds", "#90a040", "#c0d060");
-  itemBox("acorn", "#704018", "#a06030");
-  itemBox("apple", "#c03020", "#e05040");
-  itemBox("bread", "#d0a050", "#f0d080");
-  itemBox("flowerItem", "#e8e8e8", "#f0d040");
-  itemBox("cactusItem", "#208020", "#40c040");
-  itemBox("cloudItem", "#e8e8f8", "#ffffff");
-  itemBox("glove", "#c0a070", "#ffe0b0");
-
-  make("workbench", (p) => {
-    box(p, 1, 6, 14, 8, "#8a5a28");
-    box(p, 2, 4, 12, 4, "#c09050");
-  });
-  make("chest", (p) => {
-    box(p, 2, 5, 12, 9, "#8a5a20");
-    box(p, 2, 8, 12, 2, "#c09040");
-    pal(p, 8, 10, "#d0b030");
-  });
-  make("oven", (p) => {
-    box(p, 3, 3, 10, 12, "#606060");
-    box(p, 5, 7, 6, 5, "#202020");
-    box(p, 6, 8, 4, 3, "#e05020");
-  });
-  make("furnace", (p) => {
-    box(p, 2, 2, 12, 13, "#707078");
-    box(p, 5, 7, 6, 5, "#e04010");
-  });
-  make("anvil", (p) => {
-    box(p, 2, 6, 12, 4, "#909098");
-    box(p, 6, 10, 4, 5, "#606068");
-  });
-  make("lantern", (p) => {
-    box(p, 6, 2, 4, 3, "#808088");
-    box(p, 5, 5, 6, 8, "#f0d040");
-    box(p, 6, 6, 4, 5, "#fff0a0");
-  });
-
-  const toolSpr = (id, head, shaft = "#8a5a28") =>
-    make(id, (p) => {
-      box(p, 7, 4, 2, 10, shaft);
-      box(p, 4, 3, 8, 4, head);
-    });
-
-  const heads = { wood: "#c09050", rock: "#909090", iron: "#c8d0d8", gold: "#f0d040", gem: "#40e0ff" };
-  for (const [tier, col] of Object.entries(heads)) {
-    for (const t of ["Shovel", "Hoe", "Sword", "Pick", "Axe"]) toolSpr(`${tier}${t}`, col);
+function bake(rows, pal, flipX, flipY) {
+  const w = rows[0].length;
+  const h = rows.length;
+  const cv = document.createElement("canvas");
+  cv.width = w;
+  cv.height = h;
+  const ctx = cv.getContext("2d");
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const ch = rows[y][x];
+      if (ch === ".") continue;
+      ctx.fillStyle = pal === PALETTES.white || pal === PALETTES.black ? pal.w : pal[ch] || "#f0f";
+      ctx.fillRect(flipX ? w - 1 - x : x, flipY ? h - 1 - y : y, 1, 1);
+    }
   }
-
-  return { keys, map };
+  return cv;
 }
 
-export function spritePixels(name) {
-  buildSprites();
-  return map.get(name);
+// A ready-to-draw canvas for a sprite in a given palette.
+export function sprite(name, palName, flipX = false, flipY = false) {
+  const key = `${name}|${palName}|${flipX ? 1 : 0}${flipY ? 1 : 0}`;
+  let cv = cache.get(key);
+  if (!cv) {
+    cv = bake(SPRITES[name], PALETTES[palName], flipX, flipY);
+    cache.set(key, cv);
+  }
+  return cv;
+}
+
+export function furnitureSprite(kind, white = false) {
+  return sprite(kind, white ? "white" : FURNITURE_PAL[kind] || "wood");
+}
+
+// The 8x8 icon for an inventory item. `shadow` gives an all-black copy.
+export function icon(itemId, shadow = false) {
+  const key = `icon|${itemId}|${shadow ? 1 : 0}`;
+  let cv = cache.get(key);
+  if (cv) return cv;
+  let rows;
+  let pal;
+  const def = itemDef(itemId);
+  if (ICONS[itemId]) {
+    rows = ICON_SHAPES[ICONS[itemId][0]];
+    pal = ICONS[itemId][1];
+  } else if (def && def.tool !== undefined) {
+    rows = ICON_SHAPES[TOOL_SHAPE[def.tool]];
+    pal = { h: C(321), m: C(TIER_HEAD[def.tier] ?? 333) };
+  } else {
+    rows = ICON_SHAPES.chunk;
+    pal = abc(111, 333, 555);
+  }
+  if (shadow) pal = Object.fromEntries(Object.keys(pal).map((k) => [k, "#000"]));
+  cv = bake(rows, pal, false, false);
+  cache.set(key, cv);
+  return cv;
 }

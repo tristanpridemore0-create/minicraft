@@ -12,7 +12,7 @@ import { UI } from "./render/ui.js";
 import { hasSave, writeSave, readSave, snapshotTiles, applyMutations } from "./save/save.js";
 import { Inventory } from "./items/inventory.js";
 import { checkProgress } from "./progression/progress.js";
-import { Tile, liquid } from "./world/tiles.js";
+import { Tile } from "./world/tiles.js";
 
 export class Game {
   constructor(canvas) {
@@ -127,14 +127,11 @@ export class Game {
   tryUseOrMenu() {
     if (this.ui.mode !== "play") return;
     if (this.player.useFacing(this)) return;
-    this.ui.mode = "inventory";
-    this.ui.sel = this.player.active;
+    this.ui.openInventory(this.player);
   }
 
   openStation(furn) {
-    this.ui.station = furn;
-    this.ui.sel = 0;
-    this.ui.mode = furn.kind === "chest" ? "chest" : "craft";
+    this.ui.openStation(furn, this.player);
   }
 
   dropAtPlayer(id, n) {
@@ -160,13 +157,14 @@ export class Game {
     const tx = Math.floor(px / TILE);
     const ty = Math.floor(py / TILE);
     const tile = level.get(tx, ty);
-    if (liquid(tile) || tile === Tile.rock || tile === Tile.tree || tile === Tile.fall || tile === Tile.hole) return;
+    if (level.blocked(px, py, 6, 6, false)) return;
     const kind = Math.random() < 0.5 ? "slime" : "zombie";
     const color = colors[(Math.random() * colors.length) | 0];
     level.add(new Mob(px, py, kind, color));
   }
 
   step() {
+    const modeAtStart = this.ui.mode;
     if (this.ui.mode === "play" && this.input.just("pause")) {
       this.ui.mode = "pause";
       this.ui.sel = 0;
@@ -184,10 +182,6 @@ export class Game {
       level.removeDead();
       if (this.tick % 20 === 0) level.grow();
       this.spawnMobs();
-      const held = this.player.activeItem();
-      const lantern = held && (held.id === "lantern" || held.light);
-      const placed = level.entities.some((e) => e.type === "furniture" && e.kind === "lantern");
-      level.updateLight(this.player, lantern || placed);
       checkProgress(this);
       if (this.tick % 7200 === 0) this.save();
       if (this.won) {
@@ -197,7 +191,9 @@ export class Game {
       if (this.dead) this.ui.mode = "dead";
     }
 
-    this.ui.tick(this);
+    // A menu opened this frame waits a frame before reading keys, otherwise the
+    // press that opened it would close it again straight away.
+    this.ui.tick(this, this.ui.mode === modeAtStart);
     this.renderer.frame(this);
     this.ui.draw(this, this.renderer);
     this.renderer.blit();

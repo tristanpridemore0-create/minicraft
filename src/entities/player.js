@@ -4,7 +4,9 @@ import { Inventory } from "../items/inventory.js";
 import { itemDef } from "../items/defs.js";
 import { playerAttack } from "../combat/combat.js";
 import { Furniture } from "./furniture.js";
-import { Tile } from "../world/tiles.js";
+import { Tile, contactDamage } from "../world/tiles.js";
+import { TextParticle } from "./particles.js";
+import { C } from "../render/palette.js";
 
 export class Player extends Entity {
   constructor(x, y) {
@@ -24,6 +26,8 @@ export class Player extends Entity {
     this.attackTime = 0;
     this.invuln = 0;
     this.walk = 0;
+    this.swimming = false;
+    this.bumped = null;
     this.xr = 5;
     this.yr = 6;
   }
@@ -46,6 +50,7 @@ export class Player extends Entity {
     this.health -= amt;
     this.hurtTime = 10;
     this.invuln = 30;
+    this.level.add(new TextParticle(amt, this.x, this.y, C(504)));
     game.audio.hurt();
     this.knock(Math.sign(this.x - sx) * 3, Math.sign(this.y - sy) * 3);
     if (this.health <= 0) {
@@ -60,10 +65,10 @@ export class Player extends Entity {
     if (this.invuln > 0) this.invuln--;
     if (this.attackTime > 0) this.attackTime--;
 
-    const env = this.level.contactDmgAt(this.x, this.y);
+    const env = this.level.liquidAt(this.x, this.y);
     const swimming = env.water;
+    this.swimming = swimming;
     if (env.lava && this.invuln === 0) this.hurtFrom(3, this.x, this.y, game);
-    if (env.dmg && !env.lava && this.invuln === 0) this.hurtFrom(env.dmg, this.x, this.y, game);
 
     if (swimming) {
       this.staminaRecharge = 0;
@@ -99,14 +104,16 @@ export class Player extends Entity {
     else if (xa < 0) this.dir = DIR.LEFT;
     else if (xa > 0) this.dir = DIR.RIGHT;
     if (xa || ya) {
+      this.bumped = null;
       this.move(xa, ya);
       this.walk++;
+      // Walking into a cactus or an ore vein hurts; standing beside one does not.
+      if (this.bumped) this.hurtFrom(this.bumped.dmg, this.bumped.x, this.bumped.y, game);
     }
 
     if (game.input.just("attack") && this.attackTime === 0 && this.stamina > 0) {
       const item = this.activeItem();
       const cost = item && item.stamina ? item.stamina : 1;
-      this.fullSwing = this.stamina >= this.maxStamina;
       this.attackTime = 10;
       this.stamina = Math.max(0, this.stamina - Math.min(cost, this.stamina));
       playerAttack(game, this);
@@ -115,6 +122,20 @@ export class Player extends Entity {
     if (game.input.just("menu")) game.tryUseOrMenu();
 
     this.checkStairs(game);
+  }
+
+  // Called by move() when a step is blocked: note the most harmful tile touched.
+  bump(nx, ny) {
+    const x0 = Math.floor((nx - this.xr) / TILE);
+    const y0 = Math.floor((ny - this.yr) / TILE);
+    const x1 = Math.floor((nx + this.xr) / TILE);
+    const y1 = Math.floor((ny + this.yr) / TILE);
+    for (let ty = y0; ty <= y1; ty++) {
+      for (let tx = x0; tx <= x1; tx++) {
+        const dmg = contactDamage(this.level.get(tx, ty));
+        if (dmg && (!this.bumped || dmg > this.bumped.dmg)) this.bumped = { dmg, x: tx * TILE + 8, y: ty * TILE + 8 };
+      }
+    }
   }
 
   checkStairs(game) {

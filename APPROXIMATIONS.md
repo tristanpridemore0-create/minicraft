@@ -10,7 +10,9 @@ Staircases are aligned across levels. Sky stairs are ringed with hard rock that 
 
 ## Lighting and day/night
 
-Underground light is a coarse tile radius around the player, lanterns, and lava rather than the original per-pixel shader. Surface night still darkens the HUD cycle and enables monster spawns; the overworld stays readable (original night was also playable, not pitch black).
+Underground darkness is a per-pixel dithered overlay with round pools of light around the player, lanterns, and lava, in the style of the original. The light radii are this project's own choices (the player's is larger than the original's so caves are easier to read).
+
+There is a day/night clock that only controls surface monster spawns; nothing on screen changes at night. The 2011 game is believed to have had no day/night cycle at all.
 
 ## Audio
 
@@ -18,11 +20,13 @@ Original sounds were tiny Java samples. This build uses Web Audio square-wave be
 
 ## Art
 
-All sprites and tiles are newly drawn procedural pixel art in a limited palette. They follow the original's 16×16 top-down look (small character, blob slimes, simple zombies) but are not copies of the 2011 sprite sheet.
+All sprites, tiles, and the font are newly drawn for this project. They follow the original's look: 16×16 tiles built from 8×8 quarters that blend into their neighbours, the muted six-level colour palette, hearts and stamina bolts along the bottom, and blue framed menus. None of it is copied from the 2011 sprite sheet.
 
 ## Combat and tools
 
-Tool tiers, energy costs, and extra damage vs trees / rock / ore follow published wiki values. Exact original knockback, i-frames, and Air Wizard spark patterns are approximated. The wizard has 2000 HP and ranged sparks as described.
+Tool tiers exist as in the original, but damage numbers, stamina costs, knockback, invulnerability frames, and the Air Wizard's attack pattern are this project's own approximations and have not been checked against the original source. The wizard has 2000 HP and ranged sparks as described.
+
+Cactus and ore hurt when you walk into them, not when you stand beside them. Ore needs a pickaxe.
 
 ## Death and saving
 
@@ -38,7 +42,7 @@ Zombies drop cloth. In the 2011 game cloth had no crafting recipe; it is still c
 
 ## Furniture
 
-Workbench, chest, oven, furnace, anvil, and lantern match published recipes. Chests keep their contents when picked up with the power glove. Furniture can be pushed by walking into it.
+Workbench, chest, oven, furnace, anvil, and lantern match published recipes. Chests keep their contents when picked up with the power glove. Furniture can be pushed by walking into it and is not damaged by attacks.
 
 ## Controls
 

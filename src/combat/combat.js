@@ -1,6 +1,8 @@
 import { DIR } from "../constants.js";
 import { toolBonus } from "../items/defs.js";
 import { dropItems } from "../entities/itemEntity.js";
+import { TextParticle } from "../entities/particles.js";
+import { C } from "../render/palette.js";
 
 export function playerAttack(game, player) {
   const dir = player.dir;
@@ -28,14 +30,10 @@ export function playerAttack(game, player) {
 
   let hit = false;
   for (const e of player.level.entitiesIn(x0, y0, x1, y1, player)) {
-    if (e.type === "mob" || e.type === "wizard") {
-      e.hurt(dmg, player.x, player.y);
-      hit = true;
-    } else if (e.type === "furniture") {
-      e.hurt(1, player.x, player.y);
-      if (e.removed) dropItems(player.level, e.x, e.y, [{ id: e.kind, n: 1 }]);
-      hit = true;
-    }
+    if (e.type !== "mob" && e.type !== "wizard") continue;
+    const level = e.level;
+    if (e.hurt(dmg, player.x, player.y, game)) level.add(new TextParticle(dmg, e.x, e.y, C(500)));
+    hit = true;
   }
 
   const { tx, ty } = player.facingTile(dir);
