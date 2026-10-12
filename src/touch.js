@@ -33,6 +33,60 @@ export function initTouch(game) {
   else window.addEventListener("touchstart", enable, { once: true, passive: true });
 }
 
+// Phones zoom the page on a pinch or a double tap. In a game that is always an
+// accident, and a nasty one: the controls are pinned to the page rather than
+// to the glass, so zooming slides them out of reach.
+function guardZoom(root) {
+  const zoomed = () => !!window.visualViewport && window.visualViewport.scale > 1.01;
+
+  // First, stop it happening. Once zoomed we stop interfering, so the same
+  // pinch that caused it can undo it.
+  const stop = (e) => {
+    if (!zoomed() && e.cancelable) e.preventDefault();
+  };
+  const active = { passive: false };
+  // Safari reports a pinch as its own "gesture" events.
+  for (const type of ["gesturestart", "gesturechange", "gestureend"]) document.addEventListener(type, stop, active);
+  // Elsewhere a pinch is two fingers moving, and nothing here needs to scroll.
+  document.addEventListener("touchstart", (e) => e.touches.length > 1 && stop(e), active);
+  document.addEventListener("touchmove", stop, active);
+  // Two quick taps zoom as well, and mashing the C button is exactly that.
+  let lastTap = 0;
+  document.addEventListener(
+    "touchend",
+    (e) => {
+      const now = Date.now();
+      if (now - lastTap < 350) stop(e);
+      lastTap = now;
+    },
+    active
+  );
+
+  // Second, if the page ends up zoomed anyway, keep the controls on the glass
+  // by shrinking and sliding them to match the part of the page in view, and
+  // ask the browser to snap back.
+  if (!window.visualViewport) return;
+  const meta = document.querySelector('meta[name="viewport"]');
+  const normal = meta ? meta.content : "";
+  let resetting = 0;
+  const sync = () => {
+    const v = window.visualViewport;
+    const z = zoomed();
+    document.body.classList.toggle("touch-zoomed", z);
+    root.style.transform = z ? `translate(${v.offsetLeft}px, ${v.offsetTop}px) scale(${1 / v.scale})` : "";
+    if (z && meta && !resetting) {
+      // Re-stating the scale limits makes many phones snap back inside them.
+      meta.content = `${normal}, minimum-scale=1.0`;
+      resetting = setTimeout(() => {
+        meta.content = normal;
+        resetting = 0;
+      }, 400);
+    }
+  };
+  window.visualViewport.addEventListener("resize", sync);
+  window.visualViewport.addEventListener("scroll", sync);
+}
+
 function build(game) {
   const input = game.input;
   const root = el("div", "touch");
@@ -52,14 +106,22 @@ function build(game) {
   const pause = el("button", "touch-pause", "II");
   pause.setAttribute("aria-label", "Pause");
 
-  root.append(pad, buttons, pause);
+  const note = el("div", "touch-zoom-note", "Zoomed in. Pinch out to fix.");
+
+  root.append(pad, buttons, pause, note);
   document.body.classList.add("touch-on");
   document.body.append(root);
 
   // Browsers keep sound off until the page is touched; the canvas listens
-  // for that, but thumbs land on these controls first.
-  root.addEventListener("pointerdown", () => game.audio.unlock());
+  // for that, but thumbs land on these controls first. Some phones only
+  // count the finger lifting, so listen for both ends of the tap.
+  const unlock = () => game.audio.unlock();
+  root.addEventListener("pointerdown", unlock);
+  root.addEventListener("pointerup", unlock);
+  document.addEventListener("touchend", unlock);
   root.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  guardZoom(root);
 
   // --- thumb pad ---
   let padPointer = null;

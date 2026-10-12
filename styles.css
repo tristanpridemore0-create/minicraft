@@ -78,6 +78,8 @@ body.touch-on #hint {
   position: fixed;
   inset: 0;
   pointer-events: none;
+  /* touch.js moves and shrinks this layer to stay on screen if the page zooms. */
+  transform-origin: 0 0;
   --pad: min(40vmin, 180px);
   --btn: min(22vmin, 92px);
   --edge: max(14px, 3vmin);
@@ -198,4 +200,29 @@ body.touch-on #hint {
 .touch-btn.held,
 .touch-pause.held {
   background: rgba(255, 255, 255, 0.4);
+}
+
+/* If the page does get zoomed, let a pinch on the picture undo it and say so. */
+body.touch-on.touch-zoomed,
+body.touch-zoomed #game {
+  touch-action: pinch-zoom;
+}
+
+.touch-zoom-note {
+  display: none;
+  position: absolute;
+  top: calc(var(--edge) + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 14px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+body.touch-zoomed .touch-zoom-note {
+  display: block;
 }
