@@ -17,6 +17,10 @@ export class Input {
     this.down = new Set();
     this.pressed = new Set();
     this.waiting = null;
+    // Actions held or just pressed on the on-screen controls. These are kept
+    // by action rather than by key, so rebinding keys never affects them.
+    this.touchDown = new Set();
+    this.touchPressed = new Set();
     this.listen();
   }
 
@@ -35,7 +39,10 @@ export class Input {
       this.down.add(e.code);
     });
     window.addEventListener("keyup", (e) => this.down.delete(e.code));
-    window.addEventListener("blur", () => this.down.clear());
+    window.addEventListener("blur", () => {
+      this.down.clear();
+      this.touchDown.clear();
+    });
   }
 
   setBind(action, slot, code) {
@@ -49,12 +56,27 @@ export class Input {
     this.waiting = { action, slot };
   }
 
+  touchPress(action) {
+    // The key-rebinding screen waits for a key. With no keyboard, a touch
+    // backs out of the wait instead of leaving the screen stuck.
+    if (this.waiting) {
+      this.waiting = null;
+      return;
+    }
+    if (!this.touchDown.has(action)) this.touchPressed.add(action);
+    this.touchDown.add(action);
+  }
+
+  touchRelease(action) {
+    this.touchDown.delete(action);
+  }
+
   held(action) {
-    return (this.binds[action] || []).some((c) => this.down.has(c));
+    return this.touchDown.has(action) || (this.binds[action] || []).some((c) => this.down.has(c));
   }
 
   just(action) {
-    return (this.binds[action] || []).some((c) => this.pressed.has(c));
+    return this.touchPressed.has(action) || (this.binds[action] || []).some((c) => this.pressed.has(c));
   }
 
   justCode(code) {
@@ -63,6 +85,7 @@ export class Input {
 
   endFrame() {
     this.pressed.clear();
+    this.touchPressed.clear();
   }
 }
 
