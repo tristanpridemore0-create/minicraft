@@ -1,0 +1,13 @@
+# Files that belong to the project but are not part of the website.
+# Everything else in this folder is published.
+.git
+.github
+.gitignore
+.claude
+.assetsignore
+.wrangler
+node_modules
+wrangler.jsonc
+package.json
+README.md
+APPROXIMATIONS.md
