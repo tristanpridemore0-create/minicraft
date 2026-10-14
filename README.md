@@ -56,6 +56,8 @@ You hold one item at a time. Press **X** to open your pack, pick something with 
 - Seeds, acorns, flowers, sand, dirt: plant or place them.
 - Food: eat it, if you are hurt and have 5 stamina to spare.
 
+To farm, till grass with a hoe (it sometimes turns up seeds, more often with a better hoe), plant seeds on the farmland, and pick the wheat when it turns gold. Picking it with a hoe gets you extra wheat. An oven bakes 4 wheat into bread.
+
 Caves are dark. A lantern lights up more around you while it is anywhere in your pack, so you can hold a sword and still see. Put one down to light a spot for good.
 
 Walk up against a workbench, oven, furnace, anvil or chest and press **X** to open it. In a chest, left and right switch between the chest and your pack.

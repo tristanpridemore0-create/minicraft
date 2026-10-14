@@ -43,6 +43,16 @@ As in the original, a random fiftieth of the map gets a turn every tick: grass c
 
 One difference: this project has a separate cave-floor tile, so rock mined underground leaves cave floor and rock mined on the surface leaves dirt.
 
+## Farming
+
+Farming pays better than in the original, where food was hard to come by and a farm slowly shrank:
+
+- Ripe wheat gives back one or two seeds, not none or one. Wheat pulled up before it is ripe gives back the one seed that was planted.
+- Tilling grass with a hoe always makes farmland, and turns up seeds one time in five with a wooden hoe, rising to every time with a gem hoe. In the original, one swing in five gave seeds and did not till.
+- Harvesting ripe wheat with a hoe gives extra wheat: one more with a wooden hoe, up to five more with a gem hoe. It costs no more stamina than harvesting by hand.
+
+Food heals the same as in the original, and there is still no healing over time.
+
 ## Controls and inventory
 
 The item in your hand is separate from your pack, as in the original: attack uses it, and the menu key opens your pack or the furniture in front of you. Opening the pack puts the held item back on top. Dropping an item with Q is an addition.
