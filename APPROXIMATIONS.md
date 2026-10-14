@@ -30,6 +30,7 @@ These follow the original's numbers:
 - Trees fall at 20 damage, rock at 50, hard rock at 200 (gem pickaxe only). Ore gives up to one piece per hit and breaks somewhere between the third and twelfth. Damage to trees and rock slowly wears off.
 - Against monsters a hit does 1-3, plus a bonus for swords and axes that grows with the tier.
 - Stamina refills one point every 10 ticks. Emptying it means a 40-tick wait at half walking speed first. Swimming costs a point a second, then health.
+- Not in the original: carrying more than 250 things in total (counting what is inside a carried chest) makes the pack heavy, and stamina then refills every 20 ticks instead of 10. The original had no limit at all, which left chests with little use. The number is `HEAVY` in `src/entities/player.js`.
 - Being hit knocks you back six pixels and makes you untouchable for half a second.
 - Zombies chase within 50 pixels at half speed; slimes hop. Tougher colours live deeper and in the sky.
 - The Air Wizard has 2000 health, keeps his distance, and when provoked stands still for two seconds and then throws 120 sparks in a double spiral. The sparks get faster below 1000 and again below 200 health.

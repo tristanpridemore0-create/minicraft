@@ -298,8 +298,11 @@ export class Renderer {
     // Worn out: the whole stamina row flashes until it starts to refill.
     const wornOut = p.staminaRechargeDelay > 0;
     const flash = ((p.staminaRechargeDelay / 4) | 0) % 2 === 0 ? "boltFlash" : "boltEmpty";
+    const heavy = p.heavy();
     for (let i = 0; i < p.maxStamina; i++) {
-      const pal = wornOut ? flash : i < p.stamina ? "bolt" : "boltEmpty";
+      // With a heavy pack the bolts turn orange, as a reminder that they are
+      // coming back slowly.
+      const pal = wornOut ? flash : i < p.stamina ? (heavy ? "boltHeavy" : "bolt") : "boltEmpty";
       ctx.drawImage(sprite("bolt", pal), i * 8, WORLD_H + 8);
     }
     const slot = p.activeSlot();
