@@ -19,4 +19,5 @@ export function checkProgress(game) {
   if (!game.flags.iron && (has("iron") || has("ironOre"))) tell("iron", "Iron. Smelt it in a furnace");
   if (!game.flags.gem && has("gem")) tell("gem", "Gems. Craft a gem pick for the sky");
   if (!game.flags.sky && p.level.id === 1) tell("sky", "Find the Air Wizard");
+  if (!game.flags.heavy && p.heavy()) tell("heavy", "Heavy pack! Stamina comes back slower. Leave things in a chest.");
 }

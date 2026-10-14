@@ -62,6 +62,8 @@ Walk up against a workbench, oven, furnace, anvil or chest and press **X** to op
 
 Every swing costs stamina. Run out and you are worn out for a moment: the stamina row flashes, you move at half speed, and nothing comes back until it stops.
 
+Carry more than 250 things and your pack is heavy: the stamina bolts turn orange and come back at half speed. Leave what you do not need in a chest.
+
 You start with a **workbench** and a **power glove** in your pack and nothing in your hands. Punch a tree for wood, put the workbench down, and craft wooden tools.
 
 ## Build mode

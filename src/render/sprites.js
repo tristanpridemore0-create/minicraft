@@ -385,6 +385,7 @@ const PALETTES = {
   bolt: { a: C(220), b: C(550) },
   boltEmpty: { a: C(110), b: C(0) },
   boltFlash: { a: C(555), b: C(555) },
+  boltHeavy: { a: C(210), b: C(530) },
 };
 
 // Every drawing, by name. The second walking frames and all the zombie frames

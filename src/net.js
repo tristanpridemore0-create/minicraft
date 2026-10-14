@@ -24,7 +24,7 @@ const FURNITURE_KINDS = ["workbench", "chest", "oven", "furnace", "anvil", "lant
 // A guest's things are kept for the 20 worlds they visited most recently.
 const PACKS_KEPT = 20;
 // The hints a player can have been shown (see progression/progress.js).
-const HINTS = ["wood", "stone", "iron", "gem", "sky"];
+const HINTS = ["wood", "stone", "iron", "gem", "sky", "heavy"];
 // How long a joiner waits for the host's world before giving up: 15 seconds.
 const JOIN_WAIT = 900;
 // Our position goes out every 6 ticks, which is ten times a second.

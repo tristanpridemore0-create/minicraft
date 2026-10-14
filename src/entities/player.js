@@ -12,6 +12,11 @@ import { C } from "../render/palette.js";
 
 const rnd = (n) => (Math.random() * n) | 0;
 
+// Carrying more than this many things in total makes the pack heavy, and
+// stamina then comes back at half speed. It is there to make chests worth
+// using. Change this one number to make the pack hold more or less.
+export const HEAVY = 250;
+
 // There is one Player, kept in game.player.
 export class Player extends Entity {
   // A new player: full health and stamina, a workbench and a power glove in the
@@ -74,6 +79,19 @@ export class Player extends Entity {
     return (this.held && this.held.id === "lantern") || this.inv.has("lantern");
   }
 
+  // How many things the player is carrying: the pack, the item in hand, and
+  // whatever is inside a chest being carried.
+  load() {
+    const count = (s) => s.count + (s.extra ? s.extra.reduce((n, inner) => n + inner.count, 0) : 0);
+    return this.inv.slots.reduce((n, s) => n + count(s), 0) + (this.held ? count(this.held) : 0);
+  }
+
+  // Is the pack heavy (see HEAVY above)? Never in build mode, where stamina is
+  // not used up.
+  heavy() {
+    return !this.build && this.load() > HEAVY;
+  }
+
   // The player can swim.
   canSwim() {
     return true;
@@ -134,13 +152,14 @@ export class Player extends Entity {
       this.staminaRechargeDelay = 40;
     }
     if (this.staminaRechargeDelay > 0) this.staminaRechargeDelay--;
-    // Otherwise a point comes back every 10 ticks. Swimming and attacking both
-    // start that count again.
+    // Otherwise a point comes back every 10 ticks, or every 20 with a heavy
+    // pack. Swimming and attacking both start that count again.
     if (this.staminaRechargeDelay === 0) {
       this.staminaRecharge++;
       if (this.swimming) this.staminaRecharge = 0;
-      while (this.staminaRecharge > 10) {
-        this.staminaRecharge -= 10;
+      const every = this.heavy() ? 20 : 10;
+      while (this.staminaRecharge > every) {
+        this.staminaRecharge -= every;
         if (this.stamina < this.maxStamina) this.stamina++;
       }
     }
