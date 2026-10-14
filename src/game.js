@@ -16,6 +16,7 @@ import { hasSave, writeSave, readSave, snapshotTiles, applyMutations } from "./s
 import { Inventory } from "./items/inventory.js";
 import { checkProgress } from "./progression/progress.js";
 import { Tile, walkable } from "./world/tiles.js";
+import { Net } from "./net.js";
 
 // A random whole number from 0 to n - 1.
 const rnd = (n) => (Math.random() * n) | 0;
@@ -52,6 +53,8 @@ export class Game {
     this.audio = new AudioBus();
     this.renderer = new Renderer(canvas);
     this.ui = new UI();
+    // Multiplayer. It sits idle unless the player hosts or joins a room.
+    this.net = new Net(this);
     this.player = null;
     // The five levels by number (see LEVEL in constants.js), and a copy of
     // their tiles as first generated, which saving needs.
@@ -122,11 +125,28 @@ export class Game {
     for (const lv of Object.values(this.levels)) this.trySpawn(lv, 5000);
   }
 
-  // Continue the saved game: rebuild the world from its seed, then put
-  // everything the save recorded back on top.
+  // Continue the saved game.
   load() {
     const data = readSave();
     if (!data) return;
+    this.restore(data);
+    this.savedWorld = this.worldId();
+    this.ui.toast("Loaded");
+  }
+
+  // Join a friend's game. `data` is the host's world, in the shape of a saved
+  // game (see net.js). The guest arrives where the host is standing.
+  joinWorld(data) {
+    this.restore(data, true);
+    this.savedWorld = null;
+    this.ui.toast("You are in a friend's world");
+  }
+
+  // Rebuild a world from saved data: make it again from its seed, then put
+  // everything the save recorded back on top. A `guest` is joining somebody
+  // else's world, so they keep a fresh player of their own and take only the
+  // position from the save.
+  restore(data, guest = false) {
     this.newGame(data.seed, !!data.build);
     applyMutations(this.levels, data.mutations);
     for (const [id, cells] of Object.entries(data.tileData || {})) {
@@ -166,14 +186,16 @@ export class Game {
     const me = this.player;
     me.x = p.x;
     me.y = p.y;
-    me.health = p.health;
-    me.stamina = p.stamina;
-    me.dir = p.dir;
-    me.score = p.score || 0;
-    me.inv = new Inventory(p.inv || []);
-    if (p.held !== undefined) me.held = p.held;
-    // Saves from before items were held in the hand marked one pack slot as active.
-    else if (me.inv.slots[p.active]) me.held = me.inv.slots.splice(p.active, 1)[0];
+    if (!guest) {
+      me.health = p.health;
+      me.stamina = p.stamina;
+      me.dir = p.dir;
+      me.score = p.score || 0;
+      me.inv = new Inventory(p.inv || []);
+      if (p.held !== undefined) me.held = p.held;
+      // Saves from before items were held in the hand marked one pack slot as active.
+      else if (me.inv.slots[p.active]) me.held = me.inv.slots.splice(p.active, 1)[0];
+    }
     me.level = this.levels[data.levelId] || this.levels[0];
     // Keep monsters that were placed before we knew where the player is at a distance.
     for (const e of me.level.entities) {
@@ -190,14 +212,14 @@ export class Game {
         wiz.health = data.wizard.health;
       }
     }
-    this.savedWorld = this.worldId();
     this.ui.mode = "play";
-    this.ui.toast("Loaded");
   }
 
-  // Write the game to the browser's storage.
+  // Write the game to the browser's storage. A guest never saves: the world
+  // belongs to the host, and saving it here would wipe out the guest's own
+  // game.
   save() {
-    if (!this.player) return;
+    if (!this.player || this.net.isGuest) return;
     writeSave(this);
     this.savedWorld = this.worldId();
   }
@@ -213,6 +235,32 @@ export class Game {
   saveOnLeave() {
     if (!this.player || this.dead) return;
     if (this.savedWorld === this.worldId() || !hasSave() || this.tick >= 7200) this.save();
+  }
+
+  // Back to the title screen, leaving any room on the way.
+  toTitle() {
+    this.net.leave();
+    this.ui.mode = "title";
+    this.ui.sel = 0;
+  }
+
+  // Forget the world entirely. This is for a guest who has left a room: their
+  // copy of the host's world must not linger, or it could be saved by mistake.
+  dropWorld() {
+    this.player = null;
+    this.levels = {};
+    this.original = {};
+    this.savedWorld = null;
+  }
+
+  // Called by net.js when a guest is out of a room without having asked to
+  // be: the host left, or the connection failed. `why` is shown on the title
+  // screen.
+  leftRoom(why) {
+    this.dropWorld();
+    this.ui.mode = "title";
+    this.ui.sel = 0;
+    this.net.note = why;
   }
 
   // Put the Air Wizard on a random cloud in the sky. After 80 failed tries he
@@ -304,6 +352,8 @@ export class Game {
       this.ui.mode = "pause";
       this.ui.sel = 0;
     }
+
+    this.net.tick();
 
     // The world only moves while playing. Any menu pauses it.
     if (this.ui.mode === "play" && this.player) {

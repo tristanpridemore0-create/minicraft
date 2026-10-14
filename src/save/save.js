@@ -8,10 +8,17 @@ export function hasSave() {
   return !!localStorage.getItem(SAVE_KEY);
 }
 
-// The world is rebuilt from its seed on load, so a save only records what has
-// changed since: edited tiles, tile ages, and the things lying or standing
-// about. Monsters are not saved; the world repopulates itself.
+// Write the game to the browser's storage.
 export function writeSave(game) {
+  localStorage.setItem(SAVE_KEY, JSON.stringify(makeSave(game)));
+}
+
+// Everything worth keeping about the game, as one plain object. The world is
+// rebuilt from its seed on load, so this only records what has changed since:
+// edited tiles, tile ages, and the things lying or standing about. Monsters
+// are not saved; the world repopulates itself. Multiplayer uses this too: it
+// is what a host sends to somebody joining (see net.js).
+export function makeSave(game) {
   const mutations = {};
   const tileData = {};
   const furniture = {};
@@ -38,8 +45,8 @@ export function writeSave(game) {
   // Build mode has no wizard, so there is nothing to record for him.
   const p = game.player;
   // Everything that goes into the save. `version` lets a newer game recognise
-  // an older save and convert it (see Game.load).
-  const data = {
+  // an older save and convert it (see Game.restore).
+  return {
     version: 2,
     build: game.build,
     seed: game.seed,
@@ -64,7 +71,6 @@ export function writeSave(game) {
     furniture,
     items,
   };
-  localStorage.setItem(SAVE_KEY, JSON.stringify(data));
 }
 
 // Read the save back, or null if there is none or it is damaged.

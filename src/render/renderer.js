@@ -295,6 +295,11 @@ export class Renderer {
     }
     const slot = p.activeSlot();
     if (slot) drawItem(ctx, slot, 80, WORLD_H);
+    // In a room: its code and the number of players, in the bottom corner.
+    if (game.net.inRoom) {
+      const room = `${game.net.room} ${game.net.count}P`;
+      drawText(ctx, room, VIEW_W - room.length * 8, WORLD_H + 8, C(333));
+    }
   }
 
   // Stretch the small picture onto the real canvas.
