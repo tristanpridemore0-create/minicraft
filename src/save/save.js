@@ -38,7 +38,7 @@ export function makeSave(game) {
     const live = level.entities.filter((e) => !e.removed);
     furniture[id] = live
       .filter((e) => e.type === "furniture")
-      .map((e) => ({ x: e.x, y: e.y, kind: e.kind, extra: e.inv ? e.inv.toJSON() : null }));
+      .map((e) => ({ x: e.x, y: e.y, kind: e.kind, extra: e.inv ? e.inv.toJSON() : null, fid: e.fid }));
     items[id] = live.filter((e) => e.type === "item").map((e) => ({ x: e.x, y: e.y, id: e.itemId, count: e.count, time: e.time }));
   }
   const wiz = game.levels[LEVEL.SKY].entities.find((e) => e.type === "wizard" && !e.removed);

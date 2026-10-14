@@ -13,6 +13,12 @@ const STEP = [
   [1, 0],
 ];
 
+// Every piece of furniture gets a name of its own, such as "k3x9q1:12", so
+// that in multiplayer two browsers can say which one they mean. The first
+// part is picked at random when the page loads, and the second counts up.
+const TAG = Math.random().toString(36).slice(2, 8);
+let made = 0;
+
 // One piece of furniture. `kind` says which, for example "chest".
 export class Furniture extends Entity {
   // `chestSlots` is what a chest starts with inside it.
@@ -20,6 +26,7 @@ export class Furniture extends Entity {
     super(x, y);
     this.type = "furniture";
     this.kind = kind;
+    this.fid = `${TAG}:${++made}`;
     // Solid: other things cannot walk through it.
     this.blocks = true;
     this.xr = 3;
@@ -39,11 +46,11 @@ export class Furniture extends Entity {
   }
 
   // Carry out a push that was asked for, then count down the wait before the
-  // next.
-  tick() {
+  // next. In a room, the others are told where it ended up.
+  tick(game) {
     if (this.pushDir >= 0) {
       const [dx, dy] = STEP[this.pushDir];
-      this.move(dx, dy);
+      if (this.move(dx, dy) && game) game.net.furnitureMoved(this);
       this.pushDir = -1;
     }
     if (this.pushTime > 0) this.pushTime--;

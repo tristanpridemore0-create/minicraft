@@ -168,7 +168,12 @@ export class Game {
     for (const [id, list] of Object.entries(data.furniture || {})) {
       const lv = this.levels[id];
       if (!lv) continue;
-      for (const f of list) lv.add(new Furniture(f.x, f.y, f.kind, f.extra || []));
+      for (const f of list) {
+        const made = new Furniture(f.x, f.y, f.kind, f.extra || []);
+        // A guest must call each piece what the host calls it.
+        if (guest && f.fid) made.fid = f.fid;
+        lv.add(made);
+      }
     }
     for (const [id, list] of Object.entries(data.items || {})) {
       const lv = this.levels[id];

@@ -240,13 +240,14 @@ export class Player extends Entity {
         if (furn) {
           // The glove goes back in the pack and the furniture comes to hand.
           furn.removed = true;
+          game.net.furnitureRemoved(furn);
           this.inv.putFront(this.held);
           this.held = { id: furn.kind, count: 1, extra: furn.inv ? furn.inv.toJSON() : null };
           game.audio.pickup();
           return;
         }
       }
-      if (inMap && (this.useHeldOn(tx, ty, item) || level.interact(tx, ty, this, item))) {
+      if (inMap && (this.useHeldOn(tx, ty, item, game) || level.interact(tx, ty, this, item))) {
         game.audio.hit();
         return;
       }
@@ -273,7 +274,7 @@ export class Player extends Entity {
   }
 
   // Putting down, planting or eating the item in hand.
-  useHeldOn(tx, ty, item) {
+  useHeldOn(tx, ty, item, game) {
     const level = this.level;
     // Furniture goes down in the middle of the tile, if the tile is free.
     if (item.kind === "furniture") {
@@ -281,7 +282,9 @@ export class Player extends Entity {
       const cy = ty * TILE + 8;
       const taken = level.entitiesIn(cx - 3, cy - 3, cx + 3, cy + 3).some((e) => e.type === "furniture");
       if (taken || !walkable(level.get(tx, ty), false)) return false;
-      level.add(new Furniture(cx, cy, item.furniture, this.held.extra || []));
+      const made = new Furniture(cx, cy, item.furniture, this.held.extra || []);
+      level.add(made);
+      game.net.furnitureAdded(made);
       this.spendHeld();
       return true;
     }

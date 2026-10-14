@@ -15,6 +15,7 @@ import { NAMES } from "./world/tiles.js";
 import { itemDef } from "./items/defs.js";
 import { makeSave } from "./save/save.js";
 import { RemotePlayer } from "./entities/remotePlayer.js";
+import { Furniture } from "./entities/furniture.js";
 
 // Room codes leave out I and O, which look like 1 and 0.
 const CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -58,7 +59,9 @@ function cleanSlots(list, depth = 0) {
 // description makes no sense.
 function cleanFurniture(f) {
   if (!f || !FURNITURE_KINDS.includes(f.kind) || !onMap(f.x) || !onMap(f.y)) return null;
-  return { x: f.x, y: f.y, kind: f.kind, extra: cleanSlots(f.extra) };
+  // `fid` is the name the two browsers use for this piece (see furniture.js).
+  const fid = typeof f.fid === "string" && f.fid.length <= 40 ? f.fid : null;
+  return { x: f.x, y: f.y, kind: f.kind, extra: cleanSlots(f.extra), fid };
 }
 
 // The world a host sent, cut down to what a guest needs and with every value
@@ -310,6 +313,15 @@ export class Net {
         if (this.joining) this.early.push(m);
         else if (this.inRoom) this.applyTile(m);
         break;
+      // From another player: furniture was put down ("f+"), picked up ("f-"),
+      // pushed ("fm"), or a chest's contents changed ("fi").
+      case "f+":
+      case "f-":
+      case "fm":
+      case "fi":
+        if (this.joining) this.early.push(m);
+        else if (this.inRoom) this.applyFurniture(m);
+        break;
       // From another player: where they are and what they are doing.
       case "p": {
         const peer = this.peers.get(m.from);
@@ -360,6 +372,58 @@ export class Net {
     this.applying = true;
     level.set(m.x, m.y, m.i, m.d);
     this.applying = false;
+  }
+
+  // Our player put furniture down, picked it up or pushed it, or moved
+  // something in or out of a chest: tell the room. (player.js, furniture.js
+  // and ui.js call these.)
+  furnitureAdded(f) {
+    if (!this.inRoom) return;
+    const extra = f.inv ? f.inv.toJSON() : null;
+    this.send({ t: "f+", l: f.level.id, f: { fid: f.fid, x: f.x, y: f.y, kind: f.kind, extra } });
+  }
+
+  furnitureRemoved(f) {
+    if (this.inRoom) this.send({ t: "f-", l: f.level.id, fid: f.fid });
+  }
+
+  furnitureMoved(f) {
+    if (this.inRoom) this.send({ t: "fm", l: f.level.id, fid: f.fid, x: f.x, y: f.y });
+  }
+
+  chestChanged(f) {
+    if (this.inRoom && f.inv) this.send({ t: "fi", l: f.level.id, fid: f.fid, inv: f.inv.toJSON() });
+  }
+
+  // Put in a furniture change from another player.
+  applyFurniture(m) {
+    const level = this.game.levels[m.l];
+    if (!level) return;
+    const find = (fid) => level.entities.find((e) => e.type === "furniture" && !e.removed && e.fid === fid);
+    if (m.t === "f+") {
+      const f = cleanFurniture(m.f);
+      if (!f || !f.fid || find(f.fid)) return;
+      const made = new Furniture(f.x, f.y, f.kind, f.extra);
+      made.fid = f.fid;
+      level.add(made);
+      return;
+    }
+    const f = find(m.fid);
+    if (!f) return;
+    if (m.t === "f-") {
+      f.removed = true;
+      // If we had its screen open, there is nothing left to show.
+      const ui = this.game.ui;
+      if (ui.station === f && (ui.mode === "craft" || ui.mode === "chest")) ui.mode = "play";
+    } else if (m.t === "fm") {
+      if (onMap(m.x) && onMap(m.y)) {
+        f.x = m.x;
+        f.y = m.y;
+      }
+    } else if (f.inv) {
+      // Keep the same Inventory object, so an open chest screen sees the change.
+      f.inv.slots = cleanSlots(m.inv);
+    }
   }
 
   // Should this browser run the slow clock for a level (Level.tickTiles)? Alone,

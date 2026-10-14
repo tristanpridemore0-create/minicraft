@@ -260,6 +260,8 @@ export class UI {
       if (in_.just("attack")) {
         const [s] = from.slots.splice(this.chestSel[w], 1);
         to.add(s.id, s.count, s.extra);
+        // In a room, the others need to know what is in the chest now.
+        game.net.chestChanged(this.station);
         this.chestSel[w] = Math.max(0, Math.min(this.chestSel[w], from.slots.length - 1));
       }
     }
