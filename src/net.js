@@ -112,6 +112,15 @@ export class Net {
     this.sendClock = 0;
     this.sentText = "";
     this.sentAttacks = 0;
+    // Tile changes of ours that the server has not yet sent back, counted by
+    // tile. See tileChanged below.
+    this.pending = new Map();
+    // True while a change from another player is being put in, so that it is
+    // not sent straight back out again.
+    this.applying = false;
+    // Changes that reached a guest before the host's world did. They are put
+    // in once the world is there.
+    this.early = [];
     // A line for the title screen, such as "Joining KQWZ..." or why it failed.
     this.note = "";
     this.codeTries = 0;
@@ -211,6 +220,8 @@ export class Net {
     this.id = 0;
     this.hostId = 0;
     this.peers.clear();
+    this.pending.clear();
+    this.early = [];
     this.note = "";
   }
 
@@ -291,6 +302,13 @@ export class Net {
         }
         this.inRoom = true;
         this.note = "";
+        // Now put in whatever changed while the world was on its way.
+        for (const waiting of this.early.splice(0)) this.handle(waiting);
+        break;
+      // From any player, ourselves included: a tile changed.
+      case "tile":
+        if (this.joining) this.early.push(m);
+        else if (this.inRoom) this.applyTile(m);
         break;
       // From another player: where they are and what they are doing.
       case "p": {
@@ -309,6 +327,50 @@ export class Net {
         break;
       }
     }
+  }
+
+  // One of our own tiles changed (Level.set calls this): tell the room.
+  //
+  // Two players can change the same tile at almost the same moment, and each
+  // would then see their own change last and the two worlds would differ. So
+  // tile messages are also sent back to their sender, which gives everybody
+  // the same order to go by: the server's. While one of our changes is still
+  // on its way back, a change from somebody else to that tile is older than
+  // ours in that order, so it is skipped (see applyTile).
+  tileChanged(level, x, y, tile, extra) {
+    if (!this.inRoom || this.applying) return;
+    const key = `${level.id},${x},${y}`;
+    this.pending.set(key, (this.pending.get(key) || 0) + 1);
+    this.send({ t: "tile", echo: 1, l: level.id, x, y, i: tile, d: extra });
+  }
+
+  // Put in a tile change that came through the server.
+  applyTile(m) {
+    const level = this.game.levels[m.l];
+    if (!level || !whole(m.x, 0, MAP - 1) || !whole(m.y, 0, MAP - 1) || !NAMES[m.i] || !whole(m.d, 0, 255)) return;
+    const key = `${m.l},${m.x},${m.y}`;
+    const waiting = this.pending.get(key) || 0;
+    if (m.from === this.id) {
+      // Our own change coming back: it is already in place.
+      if (waiting > 1) this.pending.set(key, waiting - 1);
+      else this.pending.delete(key);
+      return;
+    }
+    if (waiting) return;
+    this.applying = true;
+    level.set(m.x, m.y, m.i, m.d);
+    this.applying = false;
+  }
+
+  // Should this browser run the slow clock for a level (Level.tickTiles)? Alone,
+  // always. In a room, only the player with the lowest number on that level
+  // does, so that things do not grow twice as fast with two people there.
+  runsTiles(level) {
+    if (!this.inRoom) return true;
+    for (const peer of this.peers.values()) {
+      if (peer.levelId === level.id && peer.id < this.id) return false;
+    }
+    return true;
   }
 
   // Called every game tick.

@@ -96,7 +96,10 @@ export class Game {
     const raw = generateWorld(this.seed);
     this.levels = {};
     for (const [id, data] of Object.entries(raw)) {
-      this.levels[id] = new Level(Number(id), data);
+      const lv = new Level(Number(id), data);
+      // In a room, every change to a tile is passed on to the other players.
+      lv.onSet = (x, y, tile, extra) => this.net.tileChanged(lv, x, y, tile, extra);
+      this.levels[id] = lv;
     }
     // Remember the untouched world, so a save only has to list what changed.
     this.original = snapshotTiles(this.levels);
@@ -365,7 +368,9 @@ export class Game {
         if (!e.removed) e.tick(this);
       }
       level.removeDead();
-      level.tickTiles();
+      // In a room, one player per level grows and spreads things, and the
+      // others are sent what changed.
+      level.tickTiles(this.net.runsTiles(level));
       if (!this.build) this.trySpawn(level, 1);
       if (running) {
         checkProgress(this);
