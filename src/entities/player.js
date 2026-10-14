@@ -68,6 +68,12 @@ export class Player extends Entity {
     return this.held;
   }
 
+  // Is the player carrying a lantern, in hand or anywhere in the pack? It
+  // lights the way in caves either way, so you can hold a sword and still see.
+  hasLantern() {
+    return (this.held && this.held.id === "lantern") || this.inv.has("lantern");
+  }
+
   // The player can swim.
   canSwim() {
     return true;
