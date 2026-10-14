@@ -4,5 +4,14 @@
   // folder are the website, apart from the ones listed in .assetsignore.
   "name": "minicraft",
   "compatibility_date": "2026-01-01",
-  "assets": { "directory": "." }
+  "assets": { "directory": "." },
+
+  // The multiplayer server (see server/worker.js). It answers anything that
+  // is not one of the game's files, which means the /room/ addresses.
+  "main": "server/worker.js",
+  // "ROOMS" is the name the server uses to reach its rooms, and "Room" is the
+  // class in server/worker.js that each room is made from.
+  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "Room" }] },
+  // Cloudflare needs to be told once when a new kind of room is added.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }]
 }
