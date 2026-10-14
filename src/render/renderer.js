@@ -90,6 +90,10 @@ export class Renderer {
     const onScreen = (e) => e.x > cx - 24 && e.x < cx + VIEW_W + 24 && e.y > cy - 32 && e.y < cy + WORLD_H + 24;
     const ents = level.entities.filter((e) => !e.removed && onScreen(e));
     if (!game.dead) ents.push(game.player);
+    // ...and the other players in the room who are on this level.
+    for (const other of game.net.peers.values()) {
+      if (other.levelId === level.id && !other.down && onScreen(other)) ents.push(other);
+    }
     const overhead = (e) => e.type === "text" || e.type === "smash";
     // ...drawn from the top of the screen downward, so that something lower
     // down overlaps what is behind it. Floating numbers and hit bursts go on
@@ -170,7 +174,8 @@ export class Renderer {
   // Draw the player, with the extras: the swing arc, ripples when swimming, and
   // furniture carried overhead.
   drawPlayer(ctx, p, x, y, tick) {
-    const pal = p.hurtTime > 0 ? "white" : "player";
+    // Other players wear one of three colours, shared out by player number.
+    const pal = p.hurtTime > 0 ? "white" : p.remote ? `friend_${p.id % 3}` : "player";
     const body = sprite(`body_${DIR_NAME[p.dir]}_${(p.walk >> 3) & 1}`, pal, p.dir === DIR.LEFT);
 
     // A swing upward is drawn first, so the body covers part of it. Swings in
@@ -251,6 +256,10 @@ export class Renderer {
     this.addLight(p.x - cx, p.y - cy - 2, game.build ? 96 : held && held.id === "lantern" ? 72 : 40);
     for (const e of level.entities) {
       if (e.type === "furniture" && e.kind === "lantern" && !e.removed) this.addLight(e.x - cx, e.y - cy, 64);
+    }
+    // Other players carry their own light, so you can find a friend in a cave.
+    for (const other of game.net.peers.values()) {
+      if (other.levelId === level.id && !other.down) this.addLight(other.x - cx, other.y - cy - 2, other.heldId === "lantern" ? 72 : 40);
     }
     // Lava glows, including lava just off the screen.
     const tx1 = Math.floor((cx + VIEW_W) / TILE) + 1;

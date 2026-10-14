@@ -14,12 +14,15 @@ import { MAP, TILE, LEVEL } from "./constants.js";
 import { NAMES } from "./world/tiles.js";
 import { itemDef } from "./items/defs.js";
 import { makeSave } from "./save/save.js";
+import { RemotePlayer } from "./entities/remotePlayer.js";
 
 // Room codes leave out I and O, which look like 1 and 0.
 const CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 const FURNITURE_KINDS = ["workbench", "chest", "oven", "furnace", "anvil", "lantern"];
 // How long a joiner waits for the host's world before giving up: 15 seconds.
 const JOIN_WAIT = 900;
+// Our position goes out every 6 ticks, which is ten times a second.
+const SEND_EVERY = 6;
 
 // A fresh room code, such as "KQWZ".
 function randomCode() {
@@ -103,8 +106,12 @@ export class Net {
     // Our own player number and the host's, given out by the server.
     this.id = 0;
     this.hostId = 0;
-    // The other players in the room, by number.
+    // The other players in the room, by number. Each is a RemotePlayer.
     this.peers = new Map();
+    // For sendPosition: a tick counter, and what was last sent.
+    this.sendClock = 0;
+    this.sentText = "";
+    this.sentAttacks = 0;
     // A line for the title screen, such as "Joining KQWZ..." or why it failed.
     this.note = "";
     this.codeTries = 0;
@@ -233,7 +240,7 @@ export class Net {
       case "hello":
         this.id = m.id;
         this.hostId = m.host;
-        for (const id of m.peers || []) this.peers.set(id, {});
+        for (const id of m.peers || []) this.peers.set(id, new RemotePlayer(id));
         // A quiet connection can be dropped along the way, so say something
         // every 20 seconds.
         this.pingTimer = setInterval(() => {
@@ -259,7 +266,9 @@ export class Net {
         break;
       // From the server: somebody arrived. The host sends them the world.
       case "join":
-        this.peers.set(m.id, {});
+        this.peers.set(m.id, new RemotePlayer(m.id));
+        // Forget what was last sent, so the newcomer is told where we are.
+        this.sentText = "";
         if (this.inRoom) ui.toast("A friend joined");
         if (this.hosting) this.send({ t: "world", to: m.id, save: makeSave(this.game) });
         break;
@@ -283,11 +292,55 @@ export class Net {
         this.inRoom = true;
         this.note = "";
         break;
+      // From another player: where they are and what they are doing.
+      case "p": {
+        const peer = this.peers.get(m.from);
+        if (!peer || !onMap(m.x) || !onMap(m.y) || !whole(m.l, LEVEL.CAVE3, LEVEL.SKY) || !whole(m.d, 0, 3)) break;
+        peer.update({
+          x: m.x,
+          y: m.y,
+          level: m.l,
+          dir: m.d,
+          held: itemDef(m.h) ? m.h : null,
+          swimming: !!m.s,
+          down: !!m.k,
+          attacks: whole(m.a, 0, 1e9) ? m.a : 0,
+        });
+        break;
+      }
     }
   }
 
   // Called every game tick.
   tick() {
     if (this.joining && ++this.waitTicks > JOIN_WAIT) this.stop("The host did not answer");
+    for (const peer of this.peers.values()) peer.tick();
+    this.sendPosition();
+  }
+
+  // Tell the others where our player is. It goes out ten times a second while
+  // anything is changing, straight away on an attack so the swing shows on
+  // time, and every two seconds regardless so that nobody is left guessing.
+  sendPosition() {
+    const p = this.game.player;
+    if (!this.inRoom || !p) return;
+    this.sendClock++;
+    const m = {
+      t: "p",
+      x: p.x | 0,
+      y: p.y | 0,
+      d: p.dir,
+      l: p.level.id,
+      h: p.held ? p.held.id : 0,
+      s: p.swimming ? 1 : 0,
+      a: p.attacks,
+      k: this.game.dead ? 1 : 0,
+    };
+    const text = JSON.stringify(m);
+    const changed = this.sendClock % SEND_EVERY === 0 && text !== this.sentText;
+    if (!changed && p.attacks === this.sentAttacks && this.sendClock % 120 !== 0) return;
+    this.sentText = text;
+    this.sentAttacks = p.attacks;
+    this.send(m);
   }
 }

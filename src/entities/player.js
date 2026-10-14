@@ -38,6 +38,9 @@ export class Player extends Entity {
     this.attackTime = 0;
     this.attackDir = DIR.DOWN;
     this.attackItem = null;
+    // How many attacks so far. In multiplayer the other players watch this
+    // number to know when to show a swing.
+    this.attacks = 0;
     // Counts down after being hurt. Nothing can hurt the player until it
     // reaches zero.
     this.invuln = 0;
@@ -221,6 +224,7 @@ export class Player extends Entity {
   attack(game) {
     // Flip to the other walking picture, which gives the swing a small lurch.
     this.walk += 8;
+    this.attacks++;
     this.attackDir = this.dir;
     const item = this.activeItem();
     this.attackItem = this.held ? this.held.id : null;
