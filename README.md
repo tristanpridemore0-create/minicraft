@@ -18,6 +18,14 @@ python -m http.server 5173
 
 Then open http://localhost:5173
 
+Those two run the game for one player. To try multiplayer on your own computer you also need the small server that connects players, which needs [Node.js](https://nodejs.org) installed:
+
+```bash
+npm run multiplayer
+```
+
+Then open http://localhost:8787 in two browser tabs, host in one and join from the other.
+
 ## Goal
 
 Gather resources, craft through wood → rock → iron → gold → gem tools, reach the sky, and defeat the **Air Wizard**.
@@ -62,6 +70,32 @@ In build mode only, **Stone** can be put down as a rock wall, so you can build w
 
 There is one save slot, shared between build mode and the normal game.
 
+## Multiplayer
+
+Play in the same world with friends, each on their own phone or computer. It works the same whether they are in the room with you or far away.
+
+1. One player starts or continues a world, pauses, and picks **Host game**. A four-letter room code appears. It stays on the pause screen and in the bottom corner of the screen.
+2. Everyone else picks **Join game** on the title screen and types that code. They appear where the host is standing.
+
+It works in both the normal game and build mode, with up to eight players in a room.
+
+What everyone shares:
+
+- You see each other walk, swim and swing.
+- Digging, chopping, mining, planting and building.
+- Furniture, and what is inside chests.
+
+What is not shared yet:
+
+- Monsters and the Air Wizard. Each player has their own, so you cannot see what a friend is fighting.
+- Items lying on the ground. To give a friend something, put it in a chest.
+
+Good to know:
+
+- The world belongs to the host, and only the host's game is saved. A guest arrives with a fresh pack each time, and their own saved game is left alone.
+- If the host leaves or loses their connection, the room closes and the guests go back to the title screen.
+- If you die in a room, you come back at the starting point with everything you were carrying.
+
 ## Progression
 
 1. Wood tools at a workbench
@@ -83,6 +117,7 @@ The same numeric seed regenerates the same terrain; tile edits, crop growth, you
 The game is published at https://minicraft.doublec.biz by Cloudflare. There is no build step: the files in this folder are the website.
 
 - `wrangler.jsonc` tells Cloudflare which site this is.
+- `server/worker.js` is the multiplayer server. It is the one file that runs on Cloudflare and not in the player's browser, and all it does is pass messages between the players in a room.
 - `.assetsignore` lists the files that are part of the project but not the website, such as this README. Anything not listed there is published, so add a line for any new file that should stay private to the repo.
 
 Once the repo is connected to Cloudflare, every merge to `main` publishes itself.

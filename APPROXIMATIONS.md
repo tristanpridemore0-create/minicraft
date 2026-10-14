@@ -72,3 +72,13 @@ The on-screen touch controls are an addition; the original was keyboard only.
 ## Build mode
 
 Build mode is an addition; the original had one way to play. Placing stone as a wall exists only there.
+
+## Multiplayer
+
+Multiplayer is an addition; the original was for one player. One player hosts their world and others join it with a room code.
+
+- Shared: where each player is and what they are doing, every change to a tile, furniture, and the contents of chests.
+- Not shared: monsters, the Air Wizard and his sparks, items lying on the ground, footprints in sand, and how damaged a half-broken tree or rock is. Each player has their own.
+- Only the host's game is saved. A guest brings a fresh pack and keeps nothing when they leave.
+- Dying in a room does not end the game. You come back at the starting point with full health and everything you were carrying. Alone, death is still a full restart.
+- Opening your pack or pausing freezes your own player and your own monsters, but the other players carry on and what they change still arrives.
