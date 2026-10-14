@@ -252,6 +252,27 @@ export class Game {
     this.ui.sel = 0;
   }
 
+  // Come back to life where the world starts, with a full set of hearts and
+  // everything you were carrying. This only happens in a room. Alone, dying
+  // ends the game; in a room that would shut you out while your friends play
+  // on, and a host dying would end the game for everybody.
+  respawn() {
+    const p = this.player;
+    const spawn = findSpawn(this.levels[LEVEL.SURFACE]);
+    p.level = this.levels[LEVEL.SURFACE];
+    p.x = spawn.x;
+    p.y = spawn.y;
+    p.health = p.maxHealth;
+    p.stamina = p.maxStamina;
+    p.hurtTime = 0;
+    p.xk = p.yk = 0;
+    // Two seconds in which nothing can hurt you, to get your bearings.
+    p.invuln = 120;
+    this.dead = false;
+    this.deadTime = 0;
+    this.ui.mode = "play";
+  }
+
   // Forget the world entirely. This is for a guest who has left a room: their
   // copy of the host's world must not linger, or it could be saved by mistake.
   dropWorld() {
