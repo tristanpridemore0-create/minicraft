@@ -84,10 +84,11 @@ What everyone shares:
 - You see each other walk, swim and swing.
 - Digging, chopping, mining, planting and building.
 - Furniture, and what is inside chests.
+- Monsters. Everyone on a level sees and fights the same ones, and they chase whoever is nearest. Whoever lands the last blow gets the drops and the points.
+- The Air Wizard and his sparks. When he is beaten, everybody in the room wins, and can carry on playing.
 
 What is not shared yet:
 
-- Monsters and the Air Wizard. Each player has their own, so you cannot see what a friend is fighting.
 - Items lying on the ground. To give a friend something, put it in a chest.
 
 Good to know:

@@ -42,7 +42,7 @@ There are no automated tests. After a change:
 1. Reload the page and look in the browser console for errors.
 2. Play the part you changed.
 3. If you touched the player, the level rules or the game loop, try both **New world** and **Build mode**.
-4. If you touched anything the players share (tiles, furniture, chests, the player's position or `src/net.js`), run the multiplayer server, host in one tab and join from another, and check that both tabs agree.
+4. If you touched anything the players share (tiles, furniture, chests, monsters, the player's position, or `src/net.js` and `src/netMobs.js`), run the multiplayer server, host in one tab and join from another, and check that both tabs agree.
 
 The running game is available in the console as `window.game`.
 
@@ -53,7 +53,9 @@ The running game is available in the console as `window.game`.
 - `src/game.js`: the game loop (60 ticks a second), starting a world, saving and loading, monster spawning.
 - `src/input.js`: keyboard and touch input, as named actions such as `attack` and `up`.
 - `src/touch.js`: the on-screen controls, tilt to walk, and the guard against the page zooming.
-- `src/net.js`: multiplayer. Hosting and joining a room, and every message sent to or received from the other players.
+- `src/net.js`: multiplayer. Hosting and joining a room, and the messages about players, tiles and furniture.
+- `src/netMobs.js`: sharing monsters in multiplayer. Which player's browser runs the monsters on a level, and the messages about them.
+- `src/netChecks.js`: the checks that `net.js` and `netMobs.js` run on every value another player sends.
 - `server/worker.js`: the multiplayer server. The only file that runs on Cloudflare and not in the browser. It passes messages between the players in a room and knows nothing about the game.
 - `src/world/`: `generator.js` builds the world from a seed, `level.js` holds the tile rules (digging, chopping, growing, spreading), `tiles.js` lists the tile types.
 - `src/entities/`: `player.js`, `remotePlayer.js` (somebody else's player in a multiplayer room), `mobs.js` (zombie, slime, Air Wizard, sparks), `furniture.js`, `itemEntity.js` (dropped items), `particles.js`, and `entity.js` for the movement and knockback they share.
@@ -76,6 +78,7 @@ The running game is available in the console as `window.game`.
 - Multiplayer is host and join: the host's browser holds the real world, and `APPROXIMATIONS.md` lists what is and is not shared. Three rules keep it working:
   - Change a tile only through `Level.set()`. That is where the change is sent to the other players; writing to `level.tiles` directly leaves them out.
   - Tell the room when furniture changes, with the `furniture...` and `chestChanged` functions in `net.js`.
+  - A monster may be a "ghost" that another player's browser is running (`mob.ghost`). Only the browser running it may move it, hurt it or kill it; the top of `netMobs.js` explains how. Code that makes a monster act should go where `Mob.tick` skips ghosts, and code that hurts one should go through `hurt()`, which passes the blow on.
   - Treat every message from another player as untrusted. Check each value before using it, as `net.js` does, so that a bad message cannot break somebody's game.
 - Every file starts with a comment saying what it is for, and every function has one saying what it does. Comments are in plain language and explain why, not only what. When you change code, update the comment above it so the two still agree.
 
