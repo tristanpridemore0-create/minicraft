@@ -6,6 +6,7 @@
 //   food       eat it
 //   place      put it down or plant it on the tile in front
 //   furniture  put it down as an object
+//   armor      put it on (see the armor list below)
 //   resource   nothing on its own; it is used for crafting
 
 import { TIER, TOOL } from "../constants.js";
@@ -76,6 +77,21 @@ for (const [tierName, tier] of Object.entries(TIER)) {
     };
     ITEMS[id] = TOOL_ITEMS[id];
   }
+}
+
+// Armor is worn, not held. Hold it and press the attack key to put it on; any
+// armor already being worn goes back in the pack. `armor` is how much it takes
+// off each blow from a monster, the Air Wizard or a spark, though a blow is
+// never made smaller than 1. The original game had no armor (see
+// APPROXIMATIONS.md).
+const ARMOR = [
+  ["clothArmor", "Clth Armr", 1],
+  ["ironArmor", "Iron Armr", 2],
+  ["goldArmor", "Gold Armr", 3],
+  ["gemArmor", "Gem Armr", 4],
+];
+for (const [id, name, armor] of ARMOR) {
+  ITEMS[id] = { id, name, kind: "armor", armor, sprite: id };
 }
 
 // "axe" becomes "Axe".

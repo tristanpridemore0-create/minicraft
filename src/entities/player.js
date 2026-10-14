@@ -52,6 +52,8 @@ export class Player extends Entity {
     // below).
     this.bumped = null;
     this.score = 0;
+    // The id of the armor being worn, or null (see items/defs.js).
+    this.armor = null;
     // Build mode: nothing hurts, nothing tires you, nothing runs out.
     this.build = false;
     this.xr = 4;
@@ -95,8 +97,13 @@ export class Player extends Entity {
 
   // Take damage, unless protected. `dir` is the way the blow is travelling,
   // which is the way the player gets knocked.
-  hurtFrom(amt, dir, game) {
+  //
+  // `fight` is true for a blow from a monster, the Air Wizard or a spark. Armor
+  // takes something off those, though never so much that the blow comes to
+  // less than 1. It does nothing against lava, cactus, ore or drowning.
+  hurtFrom(amt, dir, game, fight = false) {
     if (this.build || this.invuln > 0 || this.hurtTime > 0 || game.dead) return;
+    if (fight && this.armor) amt = Math.max(1, amt - itemDef(this.armor).armor);
     this.health -= amt;
     this.level.add(new TextParticle(amt, this.x, this.y, C(504)));
     this.knockback(dir);
@@ -292,6 +299,13 @@ export class Player extends Entity {
       level.add(made);
       game.net.furnitureAdded(made);
       this.spendHeld();
+      return true;
+    }
+    // Armor goes on, and whatever was being worn goes back in the pack.
+    if (item.kind === "armor") {
+      if (this.armor) this.inv.putFront({ id: this.armor, count: 1 });
+      this.armor = item.id;
+      this.held = null;
       return true;
     }
     // Food only works when hurt, and costs stamina to eat.

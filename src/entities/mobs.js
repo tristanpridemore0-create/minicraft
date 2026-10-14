@@ -85,7 +85,7 @@ export class Mob extends Entity {
     // Touching our own player hurts them. Every browser checks this for its
     // own player, whoever is running the monster.
     const me = game.dead ? null : game.player;
-    if (me && !this.removed && this.overlaps(me)) me.hurtFrom(this.dmg, this.dir, game);
+    if (me && !this.removed && this.overlaps(me)) me.hurtFrom(this.dmg, this.dir, game, true);
   }
 
   // A ghost cannot be hurt here. The blow is sent to the player running it.
@@ -195,7 +195,7 @@ export class Spark extends Entity {
     // Is the spark inside this thing's box?
     const over = (e) => Math.abs(e.x - this.x) <= e.xr && Math.abs(e.y - this.y) <= e.yr;
     const p = game.player;
-    if (p && !game.dead && over(p)) p.hurtFrom(1, p.dir ^ 1, game);
+    if (p && !game.dead && over(p)) p.hurtFrom(1, p.dir ^ 1, game, true);
     if (this.remote) return;
     for (const e of this.level.entities) {
       if (e.type === "mob" && !e.removed && over(e)) e.hurt(1, e.dir ^ 1, game);
@@ -249,7 +249,7 @@ export class AirWizard extends Entity {
     const me = game.dead ? null : game.player;
     if (this.ghost) {
       glide(this);
-      if (me && this.overlaps(me)) me.hurtFrom(3, this.dir, game);
+      if (me && this.overlaps(me)) me.hurtFrom(3, this.dir, game, true);
       return;
     }
     this.tickTime++;
@@ -314,7 +314,7 @@ export class AirWizard extends Entity {
       if (p && this.randomWalkTime === 0 && rnd(4) === 0 && d2 < 50 * 50) this.attackDelay = 120;
     }
 
-    if (me && this.overlaps(me)) me.hurtFrom(3, this.dir, game);
+    if (me && this.overlaps(me)) me.hurtFrom(3, this.dir, game, true);
   }
 
   // Being hit provokes an attack if one is not already under way. As a ghost

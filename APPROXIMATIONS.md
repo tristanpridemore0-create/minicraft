@@ -53,11 +53,20 @@ Original Minicraft had **no save** and death was a full restart. This recreation
 
 ## Armor
 
-Original Minicraft had **no armor**. Armor from later Minicraft+ / Minecraft was not added.
+Original Minicraft had **no armor**. This project adds four kinds, because a play-tester found the player too easily killed in the caves:
+
+| Armor | Made from | Takes off each blow |
+| --- | --- | --- |
+| Cloth | 10 cloth, at a workbench | 1 |
+| Iron | 10 iron, at an anvil | 2 |
+| Gold | 10 gold, at an anvil | 3 |
+| Gem | 50 gems, at an anvil | 4 |
+
+Hold it and press the attack key to put it on. It only softens blows from monsters, the Air Wizard and his sparks, never below 1, and does nothing against lava, cactus, ore or drowning. It does not wear out. Cloth, which the original had no use for, is now what cloth armor is made of.
 
 ## Cloth
 
-Zombies drop cloth. In the 2011 game cloth had no crafting recipe; it is still collected here for fidelity.
+Zombies drop cloth. In the 2011 game cloth had no crafting recipe; here it makes cloth armor (see Armor above).
 
 ## Furniture
 

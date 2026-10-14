@@ -302,6 +302,7 @@ const ICON_SHAPES = {
   pile: ["........", "........", "...bb...", "..bcbb..", ".bbbbcb.", "bbcbbbbb", "aaaaaaaa", "........"],
   glass: [".aaaaaa.", "abbcbbba", "abcbbbba", "abbbbbba", "abbbbcba", "abbbcbba", "abbbbbba", ".aaaaaa."],
   glove: ["..aaaa..", ".abbbba.", ".abbbbaa", ".abbbbba", ".abbbbba", "..abbba.", "..abbba.", "..aaaaa."],
+  armor: [".aa..aa.", "abbaabba", "abbbbbba", ".abbbba.", ".abbcba.", ".abbbba.", ".abbbba.", ".aaaaaa."],
   workbench: ["........", "aaaaaaaa", "abbbbbba", "aaaaaaaa", ".ac..ca.", ".ac..ca.", ".aa..aa.", "........"],
   chest: ["........", ".aaaaaa.", "abbbbbba", "aaaccaaa", "abbccbba", "abbbbbba", "aaaaaaaa", "........"],
   stove: ["........", ".aaaaaa.", "abbbbbba", "abcddcba", "abcddcba", "abbbbbba", "aaaaaaaa", "........"],
@@ -347,6 +348,10 @@ const ICONS = {
   furnace: ["stove", abc(0, 222, 500, 550)],
   anvil: ["anvil", abc(0, 444, 0)],
   lantern: ["lantern", abc(111, 550, 0)],
+  clothArmor: ["armor", abc(111, 444, 555)],
+  ironArmor: ["armor", abc(111, 333, 555)],
+  goldArmor: ["armor", abc(110, 440, 553)],
+  gemArmor: ["armor", abc(101, 404, 545)],
 };
 
 // Tool icons are put together when asked for: the shape comes from the kind of

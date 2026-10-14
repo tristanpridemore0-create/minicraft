@@ -34,6 +34,9 @@ export const RECIPES = [
   { station: "workbench", result: "furnace", count: 1, cost: { stone: 20 } },
   { station: "workbench", result: "anvil", count: 1, cost: { iron: 5 } },
   { station: "workbench", result: "lantern", count: 1, cost: { wood: 5, slime: 10, glass: 4 } },
+  // Armor (see items/defs.js): cloth from zombies at a workbench, the metal
+  // kinds at an anvil.
+  { station: "workbench", result: "clothArmor", count: 1, cost: { cloth: 10 } },
   ...toolRecipes("workbench", [TIER.WOOD, TIER.ROCK]),
 
   { station: "oven", result: "bread", count: 1, cost: { wheat: 4 } },
@@ -43,6 +46,9 @@ export const RECIPES = [
   { station: "furnace", result: "glass", count: 1, cost: { sand: 4, coal: 1 } },
 
   ...toolRecipes("anvil", [TIER.IRON, TIER.GOLD, TIER.GEM]),
+  { station: "anvil", result: "ironArmor", count: 1, cost: { iron: 10 } },
+  { station: "anvil", result: "goldArmor", count: 1, cost: { gold: 10 } },
+  { station: "anvil", result: "gemArmor", count: 1, cost: { gem: 50 } },
 ];
 
 // The recipes on offer at one kind of furniture.

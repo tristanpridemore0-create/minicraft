@@ -55,6 +55,7 @@ You hold one item at a time. Press **X** to open your pack, pick something with 
 - Power glove: pick furniture up.
 - Seeds, acorns, flowers, sand, dirt: plant or place them.
 - Food: eat it, if you are hurt and have 5 stamina to spare.
+- Armor: put it on. It shows under the item in your hand, and takes some of the sting out of every blow from a monster. Make cloth armor from 10 cloth at a workbench, and iron, gold and gem armor at an anvil.
 
 Caves are dark. A lantern lights up more around you while it is anywhere in your pack, so you can hold a sword and still see. Put one down to light a spot for good.
 

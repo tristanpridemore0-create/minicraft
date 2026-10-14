@@ -286,7 +286,8 @@ export class Renderer {
     ctx.drawImage(this.lightCanvas, 0, 0);
   }
 
-  // The bottom bar: hearts, stamina bolts, and the item in hand.
+  // The bottom bar: hearts, stamina bolts, the item in hand and the armor
+  // being worn.
   drawHud(ctx, game) {
     const p = game.player;
     ctx.fillStyle = "#000";
@@ -303,6 +304,8 @@ export class Renderer {
     }
     const slot = p.activeSlot();
     if (slot) drawItem(ctx, slot, 80, WORLD_H);
+    // The armor being worn, under the item in hand.
+    if (p.armor) ctx.drawImage(icon(p.armor), 80, WORLD_H + 8);
     // In a room: its code and the number of players, in the bottom corner.
     if (game.net.inRoom) {
       const room = `${game.net.room} ${game.net.count}P`;
