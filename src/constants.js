@@ -36,7 +36,7 @@ export const TOOL = { SHOVEL: 0, HOE: 1, SWORD: 2, PICK: 3, AXE: 4 };
 // The tip jar (see render/ui.js and tipjar.js): the web address where players
 // can leave a tip, such as a PayPal.Me link. While it is empty, the tip jar
 // does not appear anywhere in the game.
-export const TIP_URL = "";
+export const TIP_URL = "https://paypal.me/stevepridemore";
 
 // The names the browser stores the saved game and the key settings under (see
 // save/save.js and input.js)...
