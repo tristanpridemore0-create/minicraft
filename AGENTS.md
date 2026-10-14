@@ -81,7 +81,9 @@ The running game is available in the console as `window.game`.
 
 ## Publishing
 
-This folder is the website, published at https://minicraft.doublec.biz. Any file that is part of the project but not part of the website, like this one, must be listed in `.assetsignore`. Do not publish or deploy the site unless asked to.
+This folder is the website. Any file that is part of the project but not part of the website, like this one, must be listed in `.assetsignore`.
+
+It is published at https://minicraft.tri-boi.workers.dev, and Cloudflare republishes it by itself every time `main` changes. So merging a pull request is publishing: do not merge one unless asked to. A second copy at https://minicraft.doublec.biz is updated by hand; do not deploy to it unless asked to.
 
 ## Changes go through pull requests
 
