@@ -12,7 +12,7 @@
 
 import { MAP, TILE, LEVEL } from "./constants.js";
 import { NAMES } from "./world/tiles.js";
-import { itemDef } from "./items/defs.js";
+import { ITEMS } from "./items/defs.js";
 import { makeSave } from "./save/save.js";
 import { RemotePlayer } from "./entities/remotePlayer.js";
 import { Furniture } from "./entities/furniture.js";
@@ -37,6 +37,21 @@ function whole(v, min, max) {
   return Number.isInteger(v) && v >= min && v <= max;
 }
 
+// Is v the id of a real item, or the number of a real tile or level? These
+// look the thing up by its own name only. A plain `ITEMS[v]` would also say
+// yes to words every JavaScript object answers to, such as "constructor".
+function isItem(v) {
+  return typeof v === "string" && Object.hasOwn(ITEMS, v);
+}
+
+function isTile(v) {
+  return whole(v, 1, 255) && Object.hasOwn(NAMES, v);
+}
+
+function isLevel(v) {
+  return whole(v, LEVEL.CAVE3, LEVEL.SKY);
+}
+
 // Is v a position, in pixels, that is on the map?
 function onMap(v) {
   return Number.isFinite(v) && v >= 0 && v < MAP * TILE;
@@ -49,8 +64,9 @@ function cleanSlots(list, depth = 0) {
   if (!Array.isArray(list) || depth > 2) return [];
   const out = [];
   for (const s of list.slice(0, 200)) {
-    if (!s || !itemDef(s.id)) continue;
-    out.push({ id: s.id, count: whole(s.count, 1, 9999) ? s.count : 1, extra: s.extra ? cleanSlots(s.extra, depth + 1) : null });
+    if (!s || !isItem(s.id)) continue;
+    const extra = s.id === "chest" && Array.isArray(s.extra) ? cleanSlots(s.extra, depth + 1) : null;
+    out.push({ id: s.id, count: whole(s.count, 1, 9999) ? s.count : 1, extra });
   }
   return out;
 }
@@ -83,10 +99,10 @@ function cleanWorld(s) {
     build: !!s.build,
     wizardDead: !!s.wizardDead,
     wizard: w && onMap(w.x) && onMap(w.y) && Number.isFinite(w.health) ? { x: w.x, y: w.y, health: w.health } : null,
-    levelId: whole(s.levelId, LEVEL.CAVE3, LEVEL.SKY) ? s.levelId : LEVEL.SURFACE,
+    levelId: isLevel(s.levelId) ? s.levelId : LEVEL.SURFACE,
     // Only where the host is standing; the guest brings their own player.
     player: { x: onMap(p.x) ? p.x : MAP * 8, y: onMap(p.y) ? p.y : MAP * 8 },
-    mutations: perLevel(s.mutations, (list) => pairs(list, (tile) => !!NAMES[tile])),
+    mutations: perLevel(s.mutations, (list) => pairs(list, isTile)),
     tileData: perLevel(s.tileData, (list) => pairs(list, (v) => whole(v, 0, 255))),
     furniture: perLevel(s.furniture, (list) => (Array.isArray(list) ? list.map(cleanFurniture).filter(Boolean) : [])),
   };
@@ -246,9 +262,14 @@ export class Net {
     }
   }
 
-  // Act on one message.
+  // Act on one message. The server stamps `from` on everything a player
+  // sends, so a message without it can only have come from the server itself.
+  // The kinds that run the room ("hello", "join" and so on) are only believed
+  // from there; otherwise any player could tell the others the host had left.
   handle(m) {
     const ui = this.game.ui;
+    const fromServer = m.from === undefined;
+    if (["hello", "error", "join", "leave", "end"].includes(m.t) && !fromServer) return;
     switch (m.t) {
       // From the server: we are in, and this is who we are.
       case "hello":
@@ -325,13 +346,13 @@ export class Net {
       // From another player: where they are and what they are doing.
       case "p": {
         const peer = this.peers.get(m.from);
-        if (!peer || !onMap(m.x) || !onMap(m.y) || !whole(m.l, LEVEL.CAVE3, LEVEL.SKY) || !whole(m.d, 0, 3)) break;
+        if (!peer || !onMap(m.x) || !onMap(m.y) || !isLevel(m.l) || !whole(m.d, 0, 3)) break;
         peer.update({
           x: m.x,
           y: m.y,
           level: m.l,
           dir: m.d,
-          held: itemDef(m.h) ? m.h : null,
+          held: isItem(m.h) ? m.h : null,
           swimming: !!m.s,
           down: !!m.k,
           attacks: whole(m.a, 0, 1e9) ? m.a : 0,
@@ -358,8 +379,9 @@ export class Net {
 
   // Put in a tile change that came through the server.
   applyTile(m) {
+    if (!isLevel(m.l) || !whole(m.x, 0, MAP - 1) || !whole(m.y, 0, MAP - 1) || !isTile(m.i) || !whole(m.d, 0, 255)) return;
     const level = this.game.levels[m.l];
-    if (!level || !whole(m.x, 0, MAP - 1) || !whole(m.y, 0, MAP - 1) || !NAMES[m.i] || !whole(m.d, 0, 255)) return;
+    if (!level) return;
     const key = `${m.l},${m.x},${m.y}`;
     const waiting = this.pending.get(key) || 0;
     if (m.from === this.id) {
@@ -370,8 +392,12 @@ export class Net {
     }
     if (waiting) return;
     this.applying = true;
-    level.set(m.x, m.y, m.i, m.d);
-    this.applying = false;
+    try {
+      level.set(m.x, m.y, m.i, m.d);
+    } finally {
+      // Whatever happens, go back to sending our own changes.
+      this.applying = false;
+    }
   }
 
   // Our player put furniture down, picked it up or pushed it, or moved
@@ -397,7 +423,7 @@ export class Net {
 
   // Put in a furniture change from another player.
   applyFurniture(m) {
-    const level = this.game.levels[m.l];
+    const level = isLevel(m.l) ? this.game.levels[m.l] : null;
     if (!level) return;
     const find = (fid) => level.entities.find((e) => e.type === "furniture" && !e.removed && e.fid === fid);
     if (m.t === "f+") {

@@ -38,8 +38,8 @@ export const Tile = {
   cloudCactus: 27,
 };
 
-// The reverse lookup, number to name. Not used at the moment, but handy when
-// debugging.
+// The reverse lookup, number to name. Multiplayer uses it to check that a tile
+// number sent by another player is a real one, and it is handy when debugging.
 export const NAMES = Object.fromEntries(Object.entries(Tile).map(([k, v]) => [v, k]));
 
 // Tiles nothing can walk through.
