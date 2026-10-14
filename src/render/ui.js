@@ -280,8 +280,9 @@ export class UI {
     if (in_.just("attack")) game.input.startRebind(actions[this.sel], 0);
   }
 
-  // The death and win screens: attack or menu goes back to the title. Dying in
-  // a multiplayer room is different: you come back to life and carry on.
+  // The death and win screens: attack or menu goes back to the title. A
+  // multiplayer room is different: after dying you come back to life, and
+  // after winning you carry on playing with your friends.
   tickEnd(game, in_) {
     if (this.endDelay > 0) {
       this.endDelay--;
@@ -289,6 +290,7 @@ export class UI {
     }
     if (in_.just("attack") || in_.just("menu")) {
       if (this.mode === "dead" && game.net.inRoom) game.respawn();
+      else if (game.net.inRoom) this.mode = "play";
       else game.toTitle();
     }
   }
@@ -303,7 +305,7 @@ export class UI {
     else if (this.mode === "chest") this.drawChest(ctx, game);
     else if (this.mode === "binds") this.drawBinds(ctx, game);
     else if (this.mode === "dead") this.drawEnd(ctx, game, "You died! Aww!", game.net.inRoom ? "Press C to go on" : "Press C to lose");
-    else if (this.mode === "won") this.drawEnd(ctx, game, "You won! Yay!", "Press C to win");
+    else if (this.mode === "won") this.drawEnd(ctx, game, "You won! Yay!", game.net.inRoom ? "Press C to go on" : "Press C to win");
 
     let top = 2;
     if (this.mode === "play" && game.player.level.id === 1) {

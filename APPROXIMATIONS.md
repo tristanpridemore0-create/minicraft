@@ -77,8 +77,10 @@ Build mode is an addition; the original had one way to play. Placing stone as a 
 
 Multiplayer is an addition; the original was for one player. One player hosts their world and others join it with a room code.
 
-- Shared: where each player is and what they are doing, every change to a tile, furniture, and the contents of chests.
-- Not shared: monsters, the Air Wizard and his sparks, items lying on the ground, footprints in sand, and how damaged a half-broken tree or rock is. Each player has their own.
+- Shared: where each player is and what they are doing, every change to a tile, furniture, the contents of chests, and the monsters, Air Wizard and sparks near any player.
+- Not shared: items lying on the ground, footprints in sand, and how damaged a half-broken tree or rock is. Each player has their own. So does each player for the monsters in parts of a level that nobody is near, which means a monster you walked away from may not be there when you come back.
+- One player's browser runs the monsters on each level: the first to arrive there. If they leave, open a menu or lose their connection, another player on the level takes over. Monsters chase the nearest player, and each player's own browser decides when that player is hurt.
+- A monster's drops and points go to the player who lands the last blow. Beating the Air Wizard wins the game for everybody in the room, the 1000 points go to whoever struck last, and play carries on afterwards.
 - Only the host's game is saved. A guest brings a fresh pack and keeps nothing when they leave.
 - Dying in a room does not end the game. You come back at the starting point with full health and everything you were carrying. Alone, death is still a full restart.
-- Opening your pack or pausing freezes your own player and your own monsters, but the other players carry on and what they change still arrives.
+- Opening your pack or pausing freezes your own player and what you see, but the world carries on for the other players and nothing can hurt you until you come back.

@@ -307,9 +307,35 @@ export class Game {
     sky.add(new AirWizard(MAP * 8, MAP * 8));
   }
 
+  // The players on a level who are alive: ours and, in a room, everybody
+  // else's. Each has an x and a y.
+  playersOn(level) {
+    const out = [];
+    if (this.player && this.player.level === level && !this.dead) out.push(this.player);
+    for (const other of this.net.peers.values()) {
+      if (other.levelId === level.id && !other.down) out.push(other);
+    }
+    return out;
+  }
+
+  // The living player nearest to a monster, or null if there is none on its
+  // level. Monsters use this to choose who to chase.
+  nearestPlayer(mob) {
+    let best = null;
+    let bestD2 = Infinity;
+    for (const p of this.playersOn(mob.level)) {
+      const d2 = (p.x - mob.x) * (p.x - mob.x) + (p.y - mob.y) * (p.y - mob.y);
+      if (d2 < bestD2) {
+        best = p;
+        bestD2 = d2;
+      }
+    }
+    return best;
+  }
+
   // Try `count` times to put a monster on a random tile. Deeper levels get
   // tougher ones; the sky gets the toughest. A try fails if the spot is near
-  // the player, crowded, or not somewhere a monster can stand.
+  // a player, crowded, or not somewhere a monster can stand.
   trySpawn(level, count) {
     const depth = level.id;
     // The range of monster levels for this level of the world: 1 on the
@@ -319,7 +345,7 @@ export class Game {
     // How much empty space a new monster needs around it. It is more on the
     // surface, which keeps things quieter up there.
     const room = (depth === 0 ? 8 : 4) * TILE;
-    const p = this.player;
+    const players = this.playersOn(level);
     for (let i = 0; i < count; i++) {
       const lvl = rnd(max - min + 1) + min;
       const kind = rnd(2) === 0 ? "slime" : "zombie";
@@ -327,7 +353,7 @@ export class Game {
       const ty = rnd(MAP);
       const x = tx * TILE + 8;
       const y = ty * TILE + 8;
-      if (p && p.level === level && (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y) < 80 * 80) continue;
+      if (players.some((p) => (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y) < 80 * 80)) continue;
       if (!walkable(level.get(tx, ty), false)) continue;
       if (level.entitiesIn(x - room, y - room, x + room, y + room).length) continue;
       level.add(new Mob(x, y, kind, lvl));
@@ -394,10 +420,11 @@ export class Game {
         if (!e.removed) e.tick(this);
       }
       level.removeDead();
-      // In a room, one player per level grows and spreads things, and the
-      // others are sent what changed.
-      level.tickTiles(this.net.runsTiles(level));
-      if (!this.build) this.trySpawn(level, 1);
+      // In a room, one player runs each level: they grow and spread things
+      // and bring in new monsters, and the others are sent what happened.
+      const runs = this.net.mobs.runs();
+      level.tickTiles(runs);
+      if (!this.build && runs) this.trySpawn(level, 1);
       if (running) {
         checkProgress(this);
         // Autosave every two minutes of play, which is 7200 ticks.

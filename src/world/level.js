@@ -39,6 +39,9 @@ export class Level {
     // Everything on this level that is not a tile: monsters, furniture, dropped
     // items and particles. The player is kept separately, in game.player.
     this.entities = [];
+    // Multiplayer: our own monsters, put away while another player's are
+    // being shown on this level instead (see netMobs.js).
+    this.asleep = [];
     // Build mode: everything breaks on the first hit.
     this.instant = false;
     // Multiplayer: a function to call whenever a tile changes, so the change
@@ -333,7 +336,7 @@ export class Level {
   // water and lava run into holes.
   //
   // `grow` is false for a player in a multiplayer room who is not the one
-  // running this level's clock (see Net.runsTiles). They still fade their own
+  // running this level's clock (see MobShare.runs in netMobs.js). They still fade their own
   // footprints and mend their own half-broken tiles, which nobody else sees,
   // but leave the changes to the world itself to the player who is.
   tickTiles(grow = true) {
