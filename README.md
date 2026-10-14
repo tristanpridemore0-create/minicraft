@@ -114,13 +114,13 @@ The same numeric seed regenerates the same terrain; tile edits, crop growth, you
 
 ## Publishing
 
-The game is published at https://minicraft.doublec.biz by Cloudflare. There is no build step: the files in this folder are the website.
+The game is published at https://minicraft.tri-boi.workers.dev by Cloudflare. Every merge to `main` publishes itself there a minute or two later. There is no build step: the files in this folder are the website.
+
+A second copy at https://minicraft.doublec.biz is updated by hand, so it can be a little behind.
 
 - `wrangler.jsonc` tells Cloudflare which site this is.
 - `server/worker.js` is the multiplayer server. It is the one file that runs on Cloudflare and not in the player's browser, and all it does is pass messages between the players in a room.
 - `.assetsignore` lists the files that are part of the project but not the website, such as this README. Anything not listed there is published, so add a line for any new file that should stay private to the repo.
-
-Once the repo is connected to Cloudflare, every merge to `main` publishes itself.
 
 ## Notes
 
