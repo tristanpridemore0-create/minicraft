@@ -93,7 +93,8 @@ What is not shared yet:
 
 Good to know:
 
-- The world belongs to the host, and only the host's game is saved. A guest arrives with a fresh pack each time, and their own saved game is left alone.
+- The world belongs to the host, and only the host's game is saved. A guest's own saved game is left alone.
+- A guest keeps what they are carrying. Leave a friend's world and join it again later, and your pack, the item in your hand, your hearts and your score are as you left them. This is remembered on the phone or computer you played on, separately for each world, and not in build mode.
 - If the host leaves or loses their connection, the room closes and the guests go back to the title screen.
 - If you die in a room, you come back at the starting point with everything you were carrying.
 
