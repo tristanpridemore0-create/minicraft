@@ -14,7 +14,7 @@ export const Tile = {
   tree: 8,
   flower: 9,
   cactus: 10,
-  // Dug with a shovel. Nothing can walk over it.
+  // Dug with a shovel. You can cross it, but monsters cannot.
   hole: 11,
   // The bare floor of the caves.
   stoneFloor: 12,
@@ -61,16 +61,19 @@ export function liquid(id) {
   return id === Tile.water || id === Tile.lava;
 }
 
-// Gaps in the ground. Nothing can walk over them.
+// Gaps in the ground: a dug hole, or the open air between clouds.
 export function holeLike(id) {
   return id === Tile.hole || id === Tile.fall;
 }
 
 // Can something stand on this tile? `canSwim` is true for the player and false
-// for monsters, so water and lava stop monsters but not you.
+// for monsters, so water, lava and dug holes stop monsters but not you. A hole
+// has to let you through because the shovel can dig the tile you are standing
+// on, and you would be stuck in it for good otherwise. Nothing can walk on the
+// open air of the sky.
 export function walkable(id, canSwim) {
-  if (solid(id) || holeLike(id)) return false;
-  if (liquid(id) && !canSwim) return false;
+  if (solid(id) || id === Tile.fall) return false;
+  if ((liquid(id) || id === Tile.hole) && !canSwim) return false;
   return true;
 }
 
