@@ -250,16 +250,15 @@ export class Renderer {
     const { cx, cy } = this;
     this.light.fill(0);
     const p = game.player;
-    const held = p.activeItem();
-    // The player always carries a little light: more with a lantern in hand,
-    // and more still in build mode.
-    this.addLight(p.x - cx, p.y - cy - 2, game.build ? 96 : held && held.id === "lantern" ? 72 : 40);
+    // The player always carries a little light: more with a lantern, in hand or
+    // anywhere in the pack, and more still in build mode.
+    this.addLight(p.x - cx, p.y - cy - 2, game.build ? 96 : p.hasLantern() ? 72 : 40);
     for (const e of level.entities) {
       if (e.type === "furniture" && e.kind === "lantern" && !e.removed) this.addLight(e.x - cx, e.y - cy, 64);
     }
     // Other players carry their own light, so you can find a friend in a cave.
     for (const other of game.net.peers.values()) {
-      if (other.levelId === level.id && !other.down) this.addLight(other.x - cx, other.y - cy - 2, other.heldId === "lantern" ? 72 : 40);
+      if (other.levelId === level.id && !other.down) this.addLight(other.x - cx, other.y - cy - 2, other.lantern ? 72 : 40);
     }
     // Lava glows, including lava just off the screen.
     const tx1 = Math.floor((cx + VIEW_W) / TILE) + 1;

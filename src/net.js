@@ -364,6 +364,7 @@ export class Net {
           dir: m.d,
           held: isItem(m.h) ? m.h : null,
           swimming: !!m.s,
+          lantern: !!m.n,
           down: !!m.k,
           attacks: whole(m.a, 0, 1e9) ? m.a : 0,
         });
@@ -538,6 +539,8 @@ export class Net {
       l: p.level.id,
       h: p.held ? p.held.id : 0,
       s: p.swimming ? 1 : 0,
+      // Carrying a lantern, so the others can draw our light the right size.
+      n: p.hasLantern() ? 1 : 0,
       a: p.attacks,
       k: this.game.dead ? 1 : 0,
     };

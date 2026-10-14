@@ -28,6 +28,9 @@ export class RemotePlayer {
     this.swimming = false;
     // The id of the item in their hand, or null.
     this.heldId = null;
+    // Are they carrying a lantern, in hand or pack? It decides how much light
+    // they give off in a cave.
+    this.lantern = false;
     // The same three as on Player: they make the swing show.
     this.attackTime = 0;
     this.attackDir = DIR.DOWN;
@@ -60,6 +63,8 @@ export class RemotePlayer {
     this.swimming = r.swimming;
     this.down = r.down;
     this.heldId = r.held;
+    // Players on an older copy of the game only say what is in their hand.
+    this.lantern = r.lantern || r.held === "lantern";
     if (r.attacks !== this.attacks) {
       this.attacks = r.attacks;
       if (!first) {

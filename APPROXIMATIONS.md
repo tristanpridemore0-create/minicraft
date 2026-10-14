@@ -10,7 +10,7 @@ Staircases are aligned across levels. Sky stairs are ringed with hard rock that 
 
 ## Lighting and day/night
 
-Underground darkness is a per-pixel dithered overlay with round pools of light around the player, lanterns, and lava, in the style of the original. The light radii are this project's own choices (the player's is larger than the original's so caves are easier to read).
+Underground darkness is a per-pixel dithered overlay with round pools of light around the player, lanterns, and lava, in the style of the original. The light radii are this project's own choices (the player's is larger than the original's so caves are easier to read). A lantern lights your way from anywhere in your pack; in the original it only did so in your hand, which meant putting it away to fight.
 
 There is no day/night cycle. As in the original, monsters are about at all hours: each level starts populated and tops itself up over time, keeping its distance from the player and from other creatures.
 
