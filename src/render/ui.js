@@ -3,7 +3,7 @@
 // and "play" means none of them. Each screen has a tick...() method that reacts
 // to keys and a draw...() method that draws it.
 
-import { VIEW_W, VIEW_H } from "../constants.js";
+import { VIEW_W, VIEW_H, TIP_URL } from "../constants.js";
 import { C } from "./palette.js";
 import { drawText, drawTextShadow, drawFrame, textWidth, wrapText } from "./font.js";
 import { drawItem } from "./itemdraw.js";
@@ -55,6 +55,9 @@ export class UI {
     // Which screen to go back to from Controls.
     this.bindsFrom = "title";
     this.endDelay = 0;
+    // Where the tip jar sends players (see constants.js). Empty means there is
+    // no tip jar.
+    this.tipUrl = TIP_URL;
   }
 
   // Show a message at the top of the screen for four seconds.
@@ -63,9 +66,10 @@ export class UI {
     this.msgTime = 240;
   }
 
-  // The title menu. "Continue" only appears when there is a saved game.
+  // The title menu. "Continue" only appears when there is a saved game, and
+  // "Tip jar" only when there is somewhere to send a tip.
   titleItems(game) {
-    const items = ["New world", "Build mode", "Join game", "Seed", "Controls"];
+    const items = ["New world", "Build mode", "Join game", "Seed", ...(this.tipUrl ? ["Tip jar"] : []), "Controls"];
     return game.hasSave() ? ["Continue", ...items] : items;
   }
 
@@ -123,6 +127,7 @@ export class UI {
     else if (this.mode === "craft") this.tickCraft(game, in_);
     else if (this.mode === "chest") this.tickChest(game, in_);
     else if (this.mode === "binds") this.tickBinds(game, in_);
+    else if (this.mode === "tip") this.tickTip(in_);
     else if (this.mode === "dead" || this.mode === "won") this.tickEnd(game, in_);
   }
 
@@ -158,7 +163,15 @@ export class UI {
         this.mode = "binds";
         this.sel = 0;
       }
+      if (it === "Tip jar") this.mode = "tip";
     }
+  }
+
+  // The tip jar screen. The menu or pause key goes back to the title. The
+  // attack key and the button on screen are handled by tipjar.js, because
+  // only a real tap or key press is allowed to open a new tab.
+  tickTip(in_) {
+    if (in_.just("menu") || in_.just("pause")) this.mode = "title";
   }
 
   // The pause menu.
@@ -304,6 +317,7 @@ export class UI {
     else if (this.mode === "craft") this.drawCraft(ctx, game);
     else if (this.mode === "chest") this.drawChest(ctx, game);
     else if (this.mode === "binds") this.drawBinds(ctx, game);
+    else if (this.mode === "tip") this.drawTip(ctx);
     else if (this.mode === "dead") this.drawEnd(ctx, game, "You died! Aww!", game.net.inRoom ? "Press C to go on" : "Press C to lose");
     else if (this.mode === "won") this.drawEnd(ctx, game, "You won! Yay!", game.net.inRoom ? "Press C to go on" : "Press C to win");
 
@@ -335,12 +349,25 @@ export class UI {
   }
 
   // A menu list centred on the screen, with "> <" around the chosen entry.
-  drawOptions(ctx, items, y0) {
+  // `step` is the distance between lines, in pixels.
+  drawOptions(ctx, items, y0, step = 10) {
     items.forEach((it, i) => {
       const on = i === this.sel;
       const text = on ? `> ${it} <` : it;
-      drawText(ctx, text, (VIEW_W - textWidth(text)) / 2, y0 + i * 10, on ? C(555) : C(222));
+      drawText(ctx, text, (VIEW_W - textWidth(text)) / 2, y0 + i * step, on ? C(555) : C(222));
     });
+  }
+
+  // The tip jar screen. The button that opens the tip page is a real link laid
+  // over the gap between the words, by tipjar.js.
+  drawTip(ctx) {
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    drawFrame(ctx, "tip jar", 0, 1, 19, 14);
+    const lines = ["Like the game?", "Leave a tip for", "the person who", "made it.", "", "Ask a grown-up", "before you pay."];
+    lines.forEach((text, i) => drawText(ctx, text, (VIEW_W - textWidth(text)) / 2, 18 + i * 9, C(555)));
+    const keys = "C: open  X: back";
+    drawText(ctx, keys, (VIEW_W - textWidth(keys)) / 2, 100, C(333));
   }
 
   // The title screen. The logo is drawn three times, slightly offset, which
@@ -351,12 +378,14 @@ export class UI {
     drawText(ctx, "MINICRAFT", 10, 16, C(10), 2);
     drawText(ctx, "MINICRAFT", 9, 15, C(131), 2);
     drawText(ctx, "MINICRAFT", 8, 14, C(551), 2);
-    this.drawOptions(ctx, this.titleItems(game), 36);
+    // With the tip jar the menu has seven lines, so they sit a little closer.
+    const items = this.titleItems(game);
+    this.drawOptions(ctx, items, 36, items.length > 6 ? 9 : 10);
     // Under the menu: news about joining a room if there is any, and
     // otherwise the seed of the next new world.
     const note = game.net.note;
     const line = (note || `Seed ${this.seedText}`).slice(0, 20);
-    drawText(ctx, line, (VIEW_W - textWidth(line)) / 2, 98, note ? C(550) : C(222));
+    drawText(ctx, line, (VIEW_W - textWidth(line)) / 2, 99, note ? C(550) : C(222));
     drawText(ctx, "(Arrow keys,X and C)", 0, 110, C(111));
   }
 

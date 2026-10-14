@@ -69,6 +69,8 @@ Carry more than 250 things and your pack is heavy: the stamina bolts turn orange
 
 You start with a **workbench** and a **power glove** in your pack and nothing in your hands. Punch a tree for wood, put the workbench down, and craft wooden tools.
 
+If the title screen shows **Tip jar**, it opens a page where you can leave a tip for the game's maker.
+
 ## Build mode
 
 Pick **Build mode** on the title screen for a world to build in and explore with no danger. There are no monsters and no Air Wizard, nothing hurts you, you never tire, and you can see further underground. You start with gem tools, every kind of furniture and a stack of things to place, and none of it runs out. Everything breaks in one hit.
