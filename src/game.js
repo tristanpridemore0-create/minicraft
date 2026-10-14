@@ -14,6 +14,7 @@ import { Renderer } from "./render/renderer.js";
 import { UI } from "./render/ui.js";
 import { hasSave, writeSave, readSave, snapshotTiles, applyMutations } from "./save/save.js";
 import { Inventory } from "./items/inventory.js";
+import { itemDef } from "./items/defs.js";
 import { checkProgress } from "./progression/progress.js";
 import { Tile, walkable } from "./world/tiles.js";
 import { Net } from "./net.js";
@@ -209,6 +210,8 @@ export class Game {
       me.score = p.score || 0;
       me.inv = new Inventory(p.inv || []);
       if (p.held !== undefined) me.held = p.held;
+      const armor = itemDef(p.armor);
+      if (armor && armor.kind === "armor") me.armor = p.armor;
       // Saves from before items were held in the hand marked one pack slot as active.
       else if (me.inv.slots[p.active]) me.held = me.inv.slots.splice(p.active, 1)[0];
     }

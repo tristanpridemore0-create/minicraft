@@ -65,6 +65,7 @@ export function makeSave(game) {
       dir: p.dir,
       score: p.score,
       held: p.held,
+      armor: p.armor,
       inv: p.inv.toJSON(),
     },
     mutations,

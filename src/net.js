@@ -15,6 +15,7 @@ import { makeSave } from "./save/save.js";
 import { RemotePlayer } from "./entities/remotePlayer.js";
 import { Furniture } from "./entities/furniture.js";
 import { Inventory } from "./items/inventory.js";
+import { itemDef } from "./items/defs.js";
 import { MobShare } from "./netMobs.js";
 import { whole, isItem, isTile, isLevel, onMap } from "./netChecks.js";
 
@@ -390,6 +391,7 @@ export class Net {
         at: Date.now(),
         inv: p.inv.toJSON(),
         held: p.held,
+        armor: p.armor,
         // Someone who leaves while dead comes back alive.
         health: game.dead ? p.maxHealth : p.health,
         score: p.score,
@@ -417,6 +419,7 @@ export class Net {
     if (!kept || typeof kept !== "object") return;
     p.inv = new Inventory(cleanSlots(kept.inv));
     p.held = cleanSlots([kept.held])[0] || null;
+    if (isItem(kept.armor) && itemDef(kept.armor).kind === "armor") p.armor = kept.armor;
     if (whole(kept.health, 1, p.maxHealth)) p.health = kept.health;
     if (whole(kept.score, 0, 1e9)) p.score = kept.score;
     for (const hint of HINTS) {

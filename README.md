@@ -55,6 +55,7 @@ You hold one item at a time. Press **X** to open your pack, pick something with 
 - Power glove: pick furniture up.
 - Seeds, acorns, flowers, sand, dirt: plant or place them.
 - Food: eat it, if you are hurt and have 5 stamina to spare.
+- Armor: put it on. It shows under the item in your hand, and takes some of the sting out of every blow from a monster. Make cloth armor from 10 cloth at a workbench, and iron, gold and gem armor at an anvil.
 
 To farm, till grass with a hoe (it sometimes turns up seeds, more often with a better hoe), plant seeds on the farmland, and pick the wheat when it turns gold. Picking it with a hoe gets you extra wheat. An oven bakes 4 wheat into bread.
 
