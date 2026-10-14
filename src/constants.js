@@ -34,6 +34,9 @@ export const TIER = { WOOD: 0, ROCK: 1, IRON: 2, GOLD: 3, GEM: 4 };
 export const TOOL = { SHOVEL: 0, HOE: 1, SWORD: 2, PICK: 3, AXE: 4 };
 
 // The names the browser stores the saved game and the key settings under (see
-// save/save.js and input.js).
+// save/save.js and input.js)...
 export const SAVE_KEY = "minicraft-save-v1";
 export const BIND_KEY = "minicraft-binds-v1";
+// ...and what a guest was carrying in each friend's world they have visited
+// (see net.js).
+export const GUEST_KEY = "minicraft-guest-v1";

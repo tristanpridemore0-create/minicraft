@@ -63,6 +63,10 @@ export class Game {
     // Play time in ticks; it stops when you die or win.
     this.tick = 0;
     this.seed = 1;
+    // A name of its own for this world, made up when the world is and kept in
+    // its save. The seed cannot do this job, because two worlds can share a
+    // seed. A multiplayer guest files what they were carrying under it.
+    this.worldKey = "";
     // deadTime and wonTimer hold back the end screens for a moment after dying
     // or winning.
     this.dead = false;
@@ -93,6 +97,7 @@ export class Game {
     this.build = build;
     // Force the seed to a whole number, and never 0.
     this.seed = seed >>> 0 || 1;
+    this.worldKey = Math.random().toString(36).slice(2, 12);
     const raw = generateWorld(this.seed);
     this.levels = {};
     for (const [id, data] of Object.entries(raw)) {
@@ -151,6 +156,9 @@ export class Game {
   // position from the save.
   restore(data, guest = false) {
     this.newGame(data.seed, !!data.build);
+    // Saves from before worlds had names get one made from the seed, so that
+    // it comes out the same every time the save is loaded.
+    this.worldKey = data.worldKey || (guest ? "" : `old-${this.seed}-${this.build ? "b" : "n"}`);
     applyMutations(this.levels, data.mutations);
     for (const [id, cells] of Object.entries(data.tileData || {})) {
       const lv = this.levels[id];
@@ -241,6 +249,11 @@ export class Game {
   // autosave is not lost. A brand-new world does not replace a different
   // saved one until it has been played for as long as the autosave waits.
   saveOnLeave() {
+    // A guest has no world to save, only what they are carrying.
+    if (this.net.isGuest) {
+      this.net.keepPack();
+      return;
+    }
     if (!this.player || this.dead) return;
     if (this.savedWorld === this.worldId() || !hasSave() || this.tick >= 7200) this.save();
   }
@@ -280,6 +293,7 @@ export class Game {
     this.levels = {};
     this.original = {};
     this.savedWorld = null;
+    this.worldKey = "";
   }
 
   // Called by net.js when a guest is out of a room without having asked to

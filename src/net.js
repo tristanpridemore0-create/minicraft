@@ -10,16 +10,21 @@
 // was written by somebody else's browser, so none of it is trusted: each value
 // is checked before it is used.
 
-import { MAP, LEVEL } from "./constants.js";
+import { MAP, LEVEL, GUEST_KEY } from "./constants.js";
 import { makeSave } from "./save/save.js";
 import { RemotePlayer } from "./entities/remotePlayer.js";
 import { Furniture } from "./entities/furniture.js";
+import { Inventory } from "./items/inventory.js";
 import { MobShare } from "./netMobs.js";
 import { whole, isItem, isTile, isLevel, onMap } from "./netChecks.js";
 
 // Room codes leave out I and O, which look like 1 and 0.
 const CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 const FURNITURE_KINDS = ["workbench", "chest", "oven", "furnace", "anvil", "lantern"];
+// A guest's things are kept for the 20 worlds they visited most recently.
+const PACKS_KEPT = 20;
+// The hints a player can have been shown (see progression/progress.js).
+const HINTS = ["wood", "stone", "iron", "gem", "sky"];
 // How long a joiner waits for the host's world before giving up: 15 seconds.
 const JOIN_WAIT = 900;
 // Our position goes out every 6 ticks, which is ten times a second.
@@ -44,6 +49,17 @@ function cleanSlots(list, depth = 0) {
     out.push({ id: s.id, count: whole(s.count, 1, 9999) ? s.count : 1, extra });
   }
   return out;
+}
+
+// Everything a guest has left behind in this browser: one entry for each
+// friend's world, filed under that world's name (Game.worldKey).
+function readPacks() {
+  try {
+    const all = JSON.parse(localStorage.getItem(GUEST_KEY));
+    return all && typeof all === "object" && !Array.isArray(all) ? all : {};
+  } catch {
+    return {};
+  }
 }
 
 // One piece of furniture as described by another browser, or null if the
@@ -72,6 +88,7 @@ function cleanWorld(s) {
     version: 2,
     seed: s.seed,
     build: !!s.build,
+    worldKey: typeof s.worldKey === "string" && /^[\w-]{1,40}$/.test(s.worldKey) ? s.worldKey : null,
     wizardDead: !!s.wizardDead,
     wizard: w && onMap(w.x) && onMap(w.y) && Number.isFinite(w.health) ? { x: w.x, y: w.y, health: w.health } : null,
     levelId: isLevel(s.levelId) ? s.levelId : LEVEL.SURFACE,
@@ -122,6 +139,8 @@ export class Net {
     this.codeTries = 0;
     this.waitTicks = 0;
     this.pingTimer = 0;
+    // Counts ticks between the times a guest's pack is put by (see keepPack).
+    this.packClock = 0;
   }
 
   // In somebody else's room, or on the way in.
@@ -185,6 +204,7 @@ export class Net {
   leave() {
     if (!this.ws) return;
     const guest = this.isGuest;
+    this.keepPack();
     this.hangUp();
     if (guest) this.game.dropWorld();
   }
@@ -193,6 +213,7 @@ export class Net {
   // on alone in their own world; a guest goes back to the title screen.
   stop(why) {
     const hosting = this.hosting;
+    this.keepPack();
     this.hangUp();
     if (hosting) this.game.ui.toast(why);
     else this.game.leftRoom(why);
@@ -305,6 +326,7 @@ export class Net {
         }
         this.inRoom = true;
         this.note = "";
+        this.takeBackPack();
         // Now put in whatever changed while the world was on its way.
         for (const waiting of this.early.splice(0)) this.handle(waiting);
         break;
@@ -348,6 +370,58 @@ export class Net {
         break;
       }
     }
+  }
+
+  // A guest's pack between visits.
+  //
+  // The world belongs to the host and a guest never saves it. But what the
+  // guest is carrying is theirs, so it is put by in their own browser, filed
+  // under the name of the world. It is written every five seconds, on leaving
+  // the room and when the page is hidden, and taken back on joining the same
+  // world again. Build mode is left out: nothing runs out there.
+  keepPack() {
+    const game = this.game;
+    const p = game.player;
+    if (!this.isGuest || !this.inRoom || !p || game.build || !game.worldKey) return;
+    try {
+      const all = readPacks();
+      all[game.worldKey] = {
+        at: Date.now(),
+        inv: p.inv.toJSON(),
+        held: p.held,
+        // Someone who leaves while dead comes back alive.
+        health: game.dead ? p.maxHealth : p.health,
+        score: p.score,
+        // Which hints they have already been shown, so they are not shown
+        // again on every visit.
+        flags: game.flags,
+      };
+      // Keep the most recent worlds only, so this cannot grow for ever.
+      const newestFirst = Object.keys(all).sort((a, b) => (all[b].at || 0) - (all[a].at || 0));
+      for (const key of newestFirst.slice(PACKS_KEPT)) delete all[key];
+      localStorage.setItem(GUEST_KEY, JSON.stringify(all));
+    } catch {
+      // The browser's storage is full or switched off. The game carries on.
+    }
+  }
+
+  // A guest has just arrived in a world: if they have been here before, give
+  // them back what they left with. It is checked like anything else that
+  // comes from outside the game, because storage can be edited by hand.
+  takeBackPack() {
+    const game = this.game;
+    const p = game.player;
+    if (!p || game.build || !game.worldKey) return;
+    const kept = readPacks()[game.worldKey];
+    if (!kept || typeof kept !== "object") return;
+    p.inv = new Inventory(cleanSlots(kept.inv));
+    p.held = cleanSlots([kept.held])[0] || null;
+    if (whole(kept.health, 1, p.maxHealth)) p.health = kept.health;
+    if (whole(kept.score, 0, 1e9)) p.score = kept.score;
+    for (const hint of HINTS) {
+      if (kept.flags && kept.flags[hint] === true) game.flags[hint] = true;
+    }
+    game.ui.toast("Welcome back. Your pack is as you left it.");
   }
 
   // One of our own tiles changed (Level.set calls this): tell the room.
@@ -446,6 +520,7 @@ export class Net {
     for (const peer of this.peers.values()) peer.tick();
     this.sendPosition();
     this.mobs.tick();
+    if (this.isGuest && this.inRoom && ++this.packClock % 300 === 0) this.keepPack();
   }
 
   // Tell the others where our player is. It goes out ten times a second while

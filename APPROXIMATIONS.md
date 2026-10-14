@@ -81,6 +81,6 @@ Multiplayer is an addition; the original was for one player. One player hosts th
 - Not shared: items lying on the ground, footprints in sand, and how damaged a half-broken tree or rock is. Each player has their own. So does each player for the monsters in parts of a level that nobody is near, which means a monster you walked away from may not be there when you come back.
 - One player's browser runs the monsters on each level: the first to arrive there. If they leave, open a menu or lose their connection, another player on the level takes over. Monsters chase the nearest player, and each player's own browser decides when that player is hurt.
 - A monster's drops and points go to the player who lands the last blow. Beating the Air Wizard wins the game for everybody in the room, the 1000 points go to whoever struck last, and play carries on afterwards.
-- Only the host's game is saved. A guest brings a fresh pack and keeps nothing when they leave.
+- Only the host's game is saved. A guest's pack, held item, health and score are kept in the guest's own browser, filed under the world they belong to, and given back when the guest joins that world again. Build mode is left out.
 - Dying in a room does not end the game. You come back at the starting point with full health and everything you were carrying. Alone, death is still a full restart.
 - Opening your pack or pausing freezes your own player and what you see, but the world carries on for the other players and nothing can hurt you until you come back.

@@ -48,6 +48,7 @@ export function makeSave(game) {
   // an older save and convert it (see Game.restore).
   return {
     version: 2,
+    worldKey: game.worldKey,
     build: game.build,
     seed: game.seed,
     tick: game.tick,
