@@ -41,6 +41,9 @@ export class Level {
     this.entities = [];
     // Build mode: everything breaks on the first hit.
     this.instant = false;
+    // Multiplayer: a function to call whenever a tile changes, so the change
+    // can be sent to the other players. The Game sets it; it may be null.
+    this.onSet = null;
   }
 
   // Where tile (x, y) sits in the long lists above.
@@ -72,6 +75,7 @@ export class Level {
     this.tiles[i] = id;
     this.data[i] = data;
     this.hurt[i] = 0;
+    if (this.onSet) this.onSet(x, y, id, data);
   }
 
   // Bare ground on this level: what is left when something is dug out.
@@ -327,14 +331,27 @@ export class Level {
   // The world's slow clock: each game tick a fiftieth of the map, picked at
   // random, gets a turn. This is what grows crops, spreads grass and lets
   // water and lava run into holes.
-  tickTiles() {
+  //
+  // `grow` is false for a player in a multiplayer room who is not the one
+  // running this level's clock (see Net.runsTiles). They still fade their own
+  // footprints and mend their own half-broken tiles, which nobody else sees,
+  // but leave the changes to the world itself to the player who is.
+  tickTiles(grow = true) {
     const n = ((this.w * this.h) / 50) | 0;
     for (let k = 0; k < n; k++) {
       const x = rnd(this.w);
       const y = rnd(this.h);
       const i = this.idx(x, y);
       const id = this.tiles[i];
-      if (id === Tile.grass) {
+      if (id === Tile.sand) {
+        // Footprints fade.
+        if (this.data[i] > 0) this.data[i]--;
+      } else if (id === Tile.tree || id === Tile.rock || id === Tile.hardRock || id === Tile.cactus) {
+        // Half-broken things slowly mend if you stop hitting them.
+        if (this.hurt[i] > 0) this.hurt[i]--;
+      } else if (!grow) {
+        // Everything below changes the world, so it is somebody else's job.
+      } else if (id === Tile.grass) {
         // Grass creeps onto a neighbouring dirt tile, one turn in 40.
         if (rnd(40) !== 0) continue;
         const [dx, dy] = NEIGHBOURS[rnd(4)];
@@ -351,17 +368,16 @@ export class Level {
         // its four pictures.
         if (rnd(2) === 0 && this.data[i] < 50) {
           this.data[i]++;
-          this.tiles[i] = Tile.wheat0 + Math.min(3, (this.data[i] / 10) | 0);
+          const stage = Tile.wheat0 + Math.min(3, (this.data[i] / 10) | 0);
+          if (stage !== id) {
+            this.tiles[i] = stage;
+            // The picture changed, so the other players need to hear of it.
+            if (this.onSet) this.onSet(x, y, stage, this.data[i]);
+          }
         }
       } else if (id === Tile.sapling || id === Tile.cactusSapling) {
         // A sapling becomes a tree or a cactus after about 100 turns.
         if (++this.data[i] > 100) this.set(x, y, id === Tile.sapling ? Tile.tree : Tile.cactus);
-      } else if (id === Tile.sand) {
-        // Footprints fade.
-        if (this.data[i] > 0) this.data[i]--;
-      } else if (id === Tile.tree || id === Tile.rock || id === Tile.hardRock || id === Tile.cactus) {
-        // Half-broken things slowly mend if you stop hitting them.
-        if (this.hurt[i] > 0) this.hurt[i]--;
       }
     }
   }

@@ -4,6 +4,7 @@
   "private": true,
   "description": "A complete browser recreation of Notch's 2011 Ludum Dare 22 game Minicraft.",
   "scripts": {
-    "start": "npx --yes serve . -p 5173"
+    "start": "npx --yes serve . -p 5173",
+    "multiplayer": "npx --yes wrangler dev --port 8787 --persist-to ../.minicraft-rooms"
   }
 }

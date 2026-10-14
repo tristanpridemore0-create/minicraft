@@ -358,6 +358,11 @@ const TIER_HEAD = [431, 333, 555, 550, 55];
 // and "black" paint every letter the same colour, for hit flashes and shadows.
 const PALETTES = {
   player: { o: C(100), s: C(532), c: C(220) },
+  // The other players in a multiplayer game wear blue, red or purple, so you
+  // can tell them from yourself and from each other.
+  friend_0: { o: C(100), s: C(532), c: C(125) },
+  friend_1: { o: C(100), s: C(532), c: C(411) },
+  friend_2: { o: C(100), s: C(532), c: C(314) },
   zombie_g: { o: C(10), s: C(252), c: C(50) },
   zombie_r: { o: C(100), s: C(522), c: C(50) },
   zombie_w: { o: C(111), s: C(444), c: C(50) },

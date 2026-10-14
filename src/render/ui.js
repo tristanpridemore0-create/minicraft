@@ -11,8 +11,6 @@ import { icon } from "./sprites.js";
 import { itemDef } from "../items/defs.js";
 import { recipesFor } from "../crafting/recipes.js";
 
-const PAUSE_ITEMS = ["Resume", "Save", "Controls", "Title"];
-
 // Friendlier names for keys on the Controls screen: "KeyW" becomes "W" and
 // "ArrowUp" becomes "UP".
 const KEY_NAMES = { Escape: "ESC", ArrowUp: "UP", ArrowDown: "DOWN", ArrowLeft: "LEFT", ArrowRight: "RIGHT" };
@@ -67,8 +65,16 @@ export class UI {
 
   // The title menu. "Continue" only appears when there is a saved game.
   titleItems(game) {
-    const items = ["New world", "Build mode", "Seed", "Controls"];
+    const items = ["New world", "Build mode", "Join game", "Seed", "Controls"];
     return game.hasSave() ? ["Continue", ...items] : items;
+  }
+
+  // The pause menu. It changes with multiplayer: alone you can open a room, a
+  // host can close theirs, and a guest can only leave, because the world is
+  // not theirs to save.
+  pauseItems(game) {
+    if (game.net.isGuest) return ["Resume", "Controls", "Leave game"];
+    return ["Resume", "Save", game.net.ws ? "Close room" : "Host game", "Controls", "Title"];
   }
 
   // Open the pack.
@@ -123,14 +129,24 @@ export class UI {
   // Up and down move the cursor (the `%` makes it wrap round at the ends), and
   // attack or menu chooses.
   tickTitle(game, in_) {
+    // Nothing to choose while waiting to get into a room.
+    if (game.net.joining) return;
     const items = this.titleItems(game);
     if (in_.just("up")) this.sel = (this.sel + items.length - 1) % items.length;
     if (in_.just("down")) this.sel = (this.sel + 1) % items.length;
     if (in_.just("attack") || in_.just("menu")) {
       const it = items[this.sel];
+      // Any choice clears an old message about a room.
+      game.net.note = "";
       if (it === "Continue") game.load();
       if (it === "New world") game.newGame(Number(this.seedText) || Date.now());
       if (it === "Build mode") game.newGame(Number(this.seedText) || Date.now(), true);
+      if (it === "Join game") {
+        const code = prompt("Room code (4 letters):", "");
+        if (code != null) game.net.join(code);
+        // The browser swallows key-up events while the prompt is open.
+        in_.down.clear();
+      }
       if (it === "Seed") {
         const s = prompt("World seed (number):", this.seedText);
         if (s != null) this.seedText = s;
@@ -147,7 +163,8 @@ export class UI {
 
   // The pause menu.
   tickPause(game, in_) {
-    const items = PAUSE_ITEMS;
+    const items = this.pauseItems(game);
+    this.sel = Math.min(this.sel, items.length - 1);
     if (in_.just("up")) this.sel = (this.sel + items.length - 1) % items.length;
     if (in_.just("down")) this.sel = (this.sel + 1) % items.length;
     if (in_.just("pause")) {
@@ -162,15 +179,21 @@ export class UI {
         this.toast("Saved");
         this.mode = "play";
       }
+      if (it === "Host game") {
+        game.net.host();
+        this.mode = "play";
+      }
+      if (it === "Close room") {
+        game.net.leave();
+        this.toast("Room closed");
+        this.mode = "play";
+      }
       if (it === "Controls") {
         this.bindsFrom = this.mode;
         this.mode = "binds";
         this.sel = 0;
       }
-      if (it === "Title") {
-        this.mode = "title";
-        this.sel = 0;
-      }
+      if (it === "Title" || it === "Leave game") game.toTitle();
     }
   }
 
@@ -237,6 +260,8 @@ export class UI {
       if (in_.just("attack")) {
         const [s] = from.slots.splice(this.chestSel[w], 1);
         to.add(s.id, s.count, s.extra);
+        // In a room, the others need to know what is in the chest now.
+        game.net.chestChanged(this.station);
         this.chestSel[w] = Math.max(0, Math.min(this.chestSel[w], from.slots.length - 1));
       }
     }
@@ -255,15 +280,16 @@ export class UI {
     if (in_.just("attack")) game.input.startRebind(actions[this.sel], 0);
   }
 
-  // The death and win screens: attack or menu goes back to the title.
+  // The death and win screens: attack or menu goes back to the title. Dying in
+  // a multiplayer room is different: you come back to life and carry on.
   tickEnd(game, in_) {
     if (this.endDelay > 0) {
       this.endDelay--;
       return;
     }
     if (in_.just("attack") || in_.just("menu")) {
-      this.mode = "title";
-      this.sel = 0;
+      if (this.mode === "dead" && game.net.inRoom) game.respawn();
+      else game.toTitle();
     }
   }
 
@@ -271,12 +297,12 @@ export class UI {
   draw(game, r) {
     const ctx = r.buffer().getContext("2d");
     if (this.mode === "title") this.drawTitle(ctx, game);
-    else if (this.mode === "pause") this.drawPause(ctx);
+    else if (this.mode === "pause") this.drawPause(ctx, game);
     else if (this.mode === "inventory") this.drawInv(ctx, game);
     else if (this.mode === "craft") this.drawCraft(ctx, game);
     else if (this.mode === "chest") this.drawChest(ctx, game);
     else if (this.mode === "binds") this.drawBinds(ctx, game);
-    else if (this.mode === "dead") this.drawEnd(ctx, game, "You died! Aww!", "Press C to lose");
+    else if (this.mode === "dead") this.drawEnd(ctx, game, "You died! Aww!", game.net.inRoom ? "Press C to go on" : "Press C to lose");
     else if (this.mode === "won") this.drawEnd(ctx, game, "You won! Yay!", "Press C to win");
 
     let top = 2;
@@ -323,17 +349,25 @@ export class UI {
     drawText(ctx, "MINICRAFT", 10, 16, C(10), 2);
     drawText(ctx, "MINICRAFT", 9, 15, C(131), 2);
     drawText(ctx, "MINICRAFT", 8, 14, C(551), 2);
-    this.drawOptions(ctx, this.titleItems(game), 42);
-    const seed = `Seed ${this.seedText}`.slice(0, 20);
-    drawText(ctx, seed, (VIEW_W - textWidth(seed)) / 2, 96, C(222));
+    this.drawOptions(ctx, this.titleItems(game), 36);
+    // Under the menu: news about joining a room if there is any, and
+    // otherwise the seed of the next new world.
+    const note = game.net.note;
+    const line = (note || `Seed ${this.seedText}`).slice(0, 20);
+    drawText(ctx, line, (VIEW_W - textWidth(line)) / 2, 98, note ? C(550) : C(222));
     drawText(ctx, "(Arrow keys,X and C)", 0, 110, C(111));
   }
 
-  // The pause menu, over a darkened world.
-  drawPause(ctx) {
+  // The pause menu, over a darkened world. In a room, the code and the number
+  // of players are shown underneath, for reading out to a friend.
+  drawPause(ctx, game) {
     this.dim(ctx);
     drawFrame(ctx, "paused", 3, 3, 16, 10);
-    this.drawOptions(ctx, PAUSE_ITEMS, 36);
+    this.drawOptions(ctx, this.pauseItems(game), 36);
+    if (game.net.inRoom) {
+      const line = `Room ${game.net.room}: ${game.net.count} here`;
+      drawTextShadow(ctx, line, (VIEW_W - textWidth(line)) / 2, 94, C(550));
+    }
   }
 
   // Scrolling list of inventory rows inside a frame.
