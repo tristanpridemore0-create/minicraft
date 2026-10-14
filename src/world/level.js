@@ -182,12 +182,17 @@ export class Level {
   }
 
   // Pull up wheat. Only ripe wheat (age 40 and over) gives any, and fully grown
-  // wheat (age 50) gives the most. A seed may come back either way.
-  harvest(tx, ty) {
+  // wheat (age 50) gives the most. `bonus` is extra wheat for harvesting with a
+  // hoe (see interact below).
+  //
+  // Seeds: ripe wheat gives back one or two, so a farm can grow; wheat pulled
+  // up early gives back only the one that was planted. The original gave back
+  // none or one, so farms slowly shrank.
+  harvest(tx, ty, bonus = 0) {
     const age = this.getData(tx, ty);
-    this.drop(tx, ty, "seeds", rnd(2));
-    if (age >= 50) this.drop(tx, ty, "wheat", rnd(3) + 2);
-    else if (age >= 40) this.drop(tx, ty, "wheat", rnd(2) + 1);
+    this.drop(tx, ty, "seeds", age >= 40 ? rnd(2) + 1 : 1);
+    if (age >= 50) this.drop(tx, ty, "wheat", rnd(3) + 2 + bonus);
+    else if (age >= 40) this.drop(tx, ty, "wheat", rnd(2) + 1 + bonus);
     this.set(tx, ty, Tile.dirt);
   }
 
@@ -237,12 +242,20 @@ export class Level {
       }
     }
 
-    // Hoe: turns ground into farmland. On grass, one swing in five turns up
-    // seeds instead.
+    // Hoe: turns ground into farmland, and a better hoe does more for a farmer.
+    // Tilling grass turns up seeds one time in five with a wooden hoe, two in
+    // five with a rock one, and so on up to every time with a gem hoe. (The
+    // original gave seeds one swing in five, and that swing did not till.)
+    // Harvesting ripe wheat with a hoe gives one extra wheat for a wooden hoe,
+    // up to five for a gem one, and costs no more stamina than bare hands.
     if (tool === TOOL.HOE) {
       if (id === Tile.grass && player.payStamina(cost)) {
-        if (rnd(5) === 0) this.drop(tx, ty, "seeds");
-        else this.set(tx, ty, Tile.farm);
+        this.set(tx, ty, Tile.farm);
+        if (rnd(5) <= lvl) this.drop(tx, ty, "seeds");
+        return true;
+      }
+      if (isWheat(id)) {
+        this.harvest(tx, ty, lvl + 1);
         return true;
       }
       if ((id === Tile.dirt || id === Tile.stoneFloor) && player.payStamina(cost)) {
