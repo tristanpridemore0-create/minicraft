@@ -8,6 +8,26 @@ import { Tile } from "../world/tiles.js";
 
 const rnd = (n) => (Math.random() * n) | 0;
 
+// Every monster gets a name of its own, such as "k3x9q1:12", so that in
+// multiplayer two browsers can say which one they mean. The first part is
+// picked at random when the page loads, and the second counts up.
+const TAG = Math.random().toString(36).slice(2, 8);
+let made = 0;
+
+// In multiplayer a monster may be a "ghost": one that another player's browser
+// is running (see netMobs.js). A ghost does no thinking here. Each tick it
+// only walks toward where its runner last said it was: a pixel at a time, or
+// faster if it has fallen behind.
+function glide(e) {
+  const dx = e.goalX - e.x;
+  const dy = e.goalY - e.y;
+  if (dx === 0 && dy === 0) return;
+  const reach = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / 6));
+  e.x += Math.max(-reach, Math.min(reach, dx));
+  e.y += Math.max(-reach, Math.min(reach, dy));
+  e.walk++;
+}
+
 // Mob levels 1-4 are drawn in these four colour sets.
 const COLORS = ["g", "r", "w", "b"];
 
@@ -32,6 +52,15 @@ export class Mob extends Entity {
     this.tickTime = 0;
     this.jumpTime = 0;
     this.randomWalkTime = 0;
+    // Multiplayer (see the note above glide): its name, whether it is a ghost,
+    // and where a ghost is heading.
+    this.mid = `${TAG}:${++made}`;
+    this.ghost = false;
+    this.goalX = x;
+    this.goalY = y;
+    // The number of the other player whose blow is being dealt right now, or
+    // 0. If the blow kills, the drops and points are theirs (see die below).
+    this.killer = 0;
   }
 
   // Monsters cannot cross water.
@@ -42,15 +71,27 @@ export class Mob extends Entity {
   // One tick: move, burn in lava, and hurt the player on contact.
   tick(game) {
     super.tick();
-    this.tickTime++;
-    // Once the player is dead there is nobody to chase.
-    const p = game.dead ? null : game.player;
-    if (this.kind === "slime") this.tickSlime(p);
-    else this.tickZombie(p);
-    // Lava burns monsters too.
-    if (this.level.tileAtPixel(this.x, this.y) === Tile.lava) this.hurt(4, this.dir ^ 1, game);
-    // Touching the player hurts them.
-    if (p && !this.removed && this.overlaps(p)) p.hurtFrom(this.dmg, this.dir, game);
+    if (this.ghost) {
+      glide(this);
+    } else {
+      this.tickTime++;
+      // Chase the nearest living player. In a room that may be somebody else's.
+      const p = game.nearestPlayer(this);
+      if (this.kind === "slime") this.tickSlime(p);
+      else this.tickZombie(p);
+      // Lava burns monsters too.
+      if (this.level.tileAtPixel(this.x, this.y) === Tile.lava) this.hurt(4, this.dir ^ 1, game);
+    }
+    // Touching our own player hurts them. Every browser checks this for its
+    // own player, whoever is running the monster.
+    const me = game.dead ? null : game.player;
+    if (me && !this.removed && this.overlaps(me)) me.hurtFrom(this.dmg, this.dir, game);
+  }
+
+  // A ghost cannot be hurt here. The blow is sent to the player running it.
+  hurt(amt, dir, game) {
+    if (this.ghost) return game.net.mobs.hit(this, amt, dir);
+    return super.hurt(amt, dir, game);
   }
 
   // Zombies walk at half speed straight at a player within 50 pixels, and
@@ -106,6 +147,11 @@ export class Mob extends Entity {
   // more for higher levels.
   die(game) {
     super.die();
+    // Killed by another player's blow: the drops and the points go to them.
+    if (this.killer && game) {
+      game.net.mobs.killedFor(this.killer, this);
+      return;
+    }
     const n = rnd(2) + 1;
     if (this.kind === "slime") dropItems(this.level, this.x, this.y, [{ id: "slime", n }]);
     else dropItems(this.level, this.x, this.y, [{ id: "cloth", n }]);
@@ -129,6 +175,10 @@ export class Spark extends Entity {
     this.time = 0;
     // Sparks last about ten seconds.
     this.lifeTime = 600 + rnd(30);
+    // Multiplayer: true for a spark thrown by a wizard that another player's
+    // browser is running. It can sting our player but not the monsters, which
+    // are that browser's business.
+    this.remote = false;
   }
 
   // Sparks drift in a straight line through everything and sting whatever
@@ -146,6 +196,7 @@ export class Spark extends Entity {
     const over = (e) => Math.abs(e.x - this.x) <= e.xr && Math.abs(e.y - this.y) <= e.yr;
     const p = game.player;
     if (p && !game.dead && over(p)) p.hurtFrom(1, p.dir ^ 1, game);
+    if (this.remote) return;
     for (const e of this.level.entities) {
       if (e.type === "mob" && !e.removed && over(e)) e.hurt(1, e.dir ^ 1, game);
     }
@@ -171,6 +222,12 @@ export class AirWizard extends Entity {
     this.attackDelay = 0;
     this.attackTime = 0;
     this.attackType = 0;
+    // Multiplayer, as for Mob: is another player's browser running him, where
+    // is he heading if so, and whose blow is being dealt.
+    this.ghost = false;
+    this.goalX = x;
+    this.goalY = y;
+    this.killer = 0;
   }
 
   // He flies: only the edge of the map stops him.
@@ -188,6 +245,13 @@ export class AirWizard extends Entity {
   // sparks, or moving about.
   tick(game) {
     super.tick();
+    // Our own player, if alive: the only one this browser may hurt.
+    const me = game.dead ? null : game.player;
+    if (this.ghost) {
+      glide(this);
+      if (me && this.overlaps(me)) me.hurtFrom(3, this.dir, game);
+      return;
+    }
     this.tickTime++;
 
     // Wind-up: two seconds standing still before the sparks start.
@@ -208,11 +272,15 @@ export class AirWizard extends Entity {
       // which gives two spirals turning opposite ways.
       const angle = this.attackTime * 0.25 * ((this.attackTime % 2) * 2 - 1);
       const speed = 0.7 + this.attackType * 0.2;
-      this.level.add(new Spark(this, Math.cos(angle) * speed, Math.sin(angle) * speed));
+      const spark = new Spark(this, Math.cos(angle) * speed, Math.sin(angle) * speed);
+      this.level.add(spark);
+      game.net.mobs.sparkThrown(spark);
       return;
     }
 
-    const p = game.dead ? null : game.player;
+    // He keeps his distance from the nearest living player, who in a room may
+    // be somebody else's.
+    const p = game.nearestPlayer(this);
     // d2 is the distance to the player, squared. Comparing squared distances
     // avoids working out a square root.
     let d2 = Infinity;
@@ -246,21 +314,25 @@ export class AirWizard extends Entity {
       if (p && this.randomWalkTime === 0 && rnd(4) === 0 && d2 < 50 * 50) this.attackDelay = 120;
     }
 
-    if (p && this.overlaps(p)) p.hurtFrom(3, this.dir, game);
+    if (me && this.overlaps(me)) me.hurtFrom(3, this.dir, game);
   }
 
-  // Being hit provokes an attack if one is not already under way.
+  // Being hit provokes an attack if one is not already under way. As a ghost
+  // he cannot be hurt here: the blow is sent to the player running him.
   hurt(amt, dir, game) {
+    if (this.ghost) return game.net.mobs.hit(this, amt, dir);
     const landed = super.hurt(amt, dir, game);
     if (landed && this.attackDelay === 0 && this.attackTime === 0) this.attackDelay = 120;
     return landed;
   }
 
-  // Worth 1000 points, and the game is won.
+  // Worth 1000 points, and the game is won. In a room the win is everybody's
+  // and the points go to whoever landed the last blow.
   die(game) {
     super.die();
     if (!game) return;
-    if (game.player) game.player.score += 1000;
+    if (!this.killer && game.player) game.player.score += 1000;
+    game.net.mobs.wizardKilled(this.killer);
     game.wizardDefeated();
   }
 }

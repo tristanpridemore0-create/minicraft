@@ -10,12 +10,12 @@
 // was written by somebody else's browser, so none of it is trusted: each value
 // is checked before it is used.
 
-import { MAP, TILE, LEVEL } from "./constants.js";
-import { NAMES } from "./world/tiles.js";
-import { ITEMS } from "./items/defs.js";
+import { MAP, LEVEL } from "./constants.js";
 import { makeSave } from "./save/save.js";
 import { RemotePlayer } from "./entities/remotePlayer.js";
 import { Furniture } from "./entities/furniture.js";
+import { MobShare } from "./netMobs.js";
+import { whole, isItem, isTile, isLevel, onMap } from "./netChecks.js";
 
 // Room codes leave out I and O, which look like 1 and 0.
 const CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -30,31 +30,6 @@ function randomCode() {
   let code = "";
   for (let i = 0; i < 4; i++) code += CODE_LETTERS[(Math.random() * CODE_LETTERS.length) | 0];
   return code;
-}
-
-// Is v a whole number from min to max?
-function whole(v, min, max) {
-  return Number.isInteger(v) && v >= min && v <= max;
-}
-
-// Is v the id of a real item, or the number of a real tile or level? These
-// look the thing up by its own name only. A plain `ITEMS[v]` would also say
-// yes to words every JavaScript object answers to, such as "constructor".
-function isItem(v) {
-  return typeof v === "string" && Object.hasOwn(ITEMS, v);
-}
-
-function isTile(v) {
-  return whole(v, 1, 255) && Object.hasOwn(NAMES, v);
-}
-
-function isLevel(v) {
-  return whole(v, LEVEL.CAVE3, LEVEL.SKY);
-}
-
-// Is v a position, in pixels, that is on the map?
-function onMap(v) {
-  return Number.isFinite(v) && v >= 0 && v < MAP * TILE;
 }
 
 // A list of item stacks (a chest's contents) with anything this game does not
@@ -127,6 +102,8 @@ export class Net {
     this.hostId = 0;
     // The other players in the room, by number. Each is a RemotePlayer.
     this.peers = new Map();
+    // Sharing monsters is a big enough job to have a file of its own.
+    this.mobs = new MobShare(this);
     // For sendPosition: a tick counter, and what was last sent.
     this.sendClock = 0;
     this.sentText = "";
@@ -234,6 +211,8 @@ export class Net {
       }
     }
     clearInterval(this.pingTimer);
+    // While the list of players is still there, for it to tidy up by.
+    this.mobs.leaveRoom();
     this.hosting = false;
     this.inRoom = false;
     this.id = 0;
@@ -342,6 +321,15 @@ export class Net {
       case "fi":
         if (this.joining) this.early.push(m);
         else if (this.inRoom) this.applyFurniture(m);
+        break;
+      // From another player: something about monsters (see netMobs.js).
+      case "m":
+      case "mq":
+      case "mh":
+      case "mk":
+      case "wz":
+      case "won":
+        if (this.inRoom) this.mobs.handle(m);
         break;
       // From another player: where they are and what they are doing.
       case "p": {
@@ -452,22 +440,12 @@ export class Net {
     }
   }
 
-  // Should this browser run the slow clock for a level (Level.tickTiles)? Alone,
-  // always. In a room, only the player with the lowest number on that level
-  // does, so that things do not grow twice as fast with two people there.
-  runsTiles(level) {
-    if (!this.inRoom) return true;
-    for (const peer of this.peers.values()) {
-      if (peer.levelId === level.id && peer.id < this.id) return false;
-    }
-    return true;
-  }
-
   // Called every game tick.
   tick() {
     if (this.joining && ++this.waitTicks > JOIN_WAIT) this.stop("The host did not answer");
     for (const peer of this.peers.values()) peer.tick();
     this.sendPosition();
+    this.mobs.tick();
   }
 
   // Tell the others where our player is. It goes out ten times a second while
